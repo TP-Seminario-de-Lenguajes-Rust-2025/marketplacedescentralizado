@@ -1,8 +1,23 @@
 [package]
 name = "marketplacedescentralizado"
 version = "0.1.0"
+authors = ["[your_name] <[your_email]>"]
 edition = "2021"
 
 [dependencies]
 ink = { version = "5.1.1", default-features = false }
 base64ct = "1.6.0"
+
+[dev-dependencies]
+ink_e2e = { version = "5.0.0" }
+
+[lib]
+path = "lib.rs"
+
+[features]
+default = ["std"]
+std = [
+    "ink/std",
+]
+ink-as-dependency = []
+e2e-tests = []
