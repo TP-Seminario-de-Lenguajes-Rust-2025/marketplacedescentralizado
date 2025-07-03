@@ -1,7 +1,9 @@
 [package]
 name = "marketplacedescentralizado"
 version = "0.1.0"
-authors = ["[your_name] <[your_email]>"]
+authors = [
+    "[Agustin Mediotti] <[agustinmediotti@gmail.com]>, [Avila Tadeo] <[tadeo.i.avila@gmail.com]>, [Agustin Olthoff] <[agusoltghoff2002@gmail.com]>, [Juan Tettamanti] <[juan.tettamanti11@gmail.com]>",
+]
 edition = "2021"
 
 [dependencies]
@@ -11,6 +13,7 @@ ink_prelude = "5.1.1"
 cargo-tarpaulin = "0.32.8"
 ink-analyzer-ir = "0.15.0"
 
+
 [dev-dependencies]
 ink_e2e = { version = "5.0.0" }
 
@@ -19,8 +22,6 @@ path = "lib.rs"
 
 [features]
 default = ["std"]
-std = [
-    "ink/std",
-]
+std = ["ink/std"]
 ink-as-dependency = []
 e2e-tests = []

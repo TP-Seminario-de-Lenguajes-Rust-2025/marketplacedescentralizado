@@ -67,7 +67,6 @@ mod marketplacedescentralizado {
         }
     }
 
-
     /// This is how you'd write end-to-end (E2E) or integration tests for ink! contracts.
     ///
     /// When running these you need to make sure that you:
@@ -92,7 +91,11 @@ mod marketplacedescentralizado {
 
             // When
             let contract = client
-                .instantiate("marketplacedescentralizado", &ink_e2e::alice(), &mut constructor)
+                .instantiate(
+                    "marketplacedescentralizado",
+                    &ink_e2e::alice(),
+                    &mut constructor,
+                )
                 .submit()
                 .await
                 .expect("instantiate failed");
@@ -112,7 +115,11 @@ mod marketplacedescentralizado {
             // Given
             let mut constructor = MarketplacedescentralizadoRef::new(false);
             let contract = client
-                .instantiate("marketplacedescentralizado", &ink_e2e::bob(), &mut constructor)
+                .instantiate(
+                    "marketplacedescentralizado",
+                    &ink_e2e::bob(),
+                    &mut constructor,
+                )
                 .submit()
                 .await
                 .expect("instantiate failed");
