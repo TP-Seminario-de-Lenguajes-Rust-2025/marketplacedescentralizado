@@ -11,7 +11,8 @@ ink = { version = "5.1.1", default-features = false }
 base64ct = "1.6.0"
 ink_prelude = "5.1.1"
 cargo-tarpaulin = "0.32.8"
-ink-analyzer-ir = "0.15.0"
+contract-logic ={ git = "https://github.com/TP-Seminario-de-Lenguajes-Rust-2025/contract-logic" , branch = "main"}
+
 
 
 [dev-dependencies]
