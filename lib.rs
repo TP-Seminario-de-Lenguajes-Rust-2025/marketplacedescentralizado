@@ -6,7 +6,7 @@ mod contract {
     
     use ink::{prelude::{string::String,vec::Vec},storage::{Mapping, StorageVec}};
     //use crate::estructuras::{publicacion::*,producto::*,orden::*,usuario::*};
-    use uuid::Uuid;
+    use uuid::Uuid; //borrar no usamos mas ahora usamos len()+1
     use std::fmt;
 
     const COMPRADOR : &str = "1";
@@ -91,6 +91,11 @@ mod contract {
             let id = Uuid::new_v4().to_string();
             Orden{id, id_vendedor, id_comprador,productos, ..Default::default()}
         }
+        //nuevo new de orden sin usar uuid pasamos id desde el sistema
+    /*  pub fn new(id: String, id_vendedor:String, id_comprador:String, productos:Vec<String>) -> Orden {
+            Orden { id, id_vendedor, id_comprador, productos, ..Default::default() }
+            }
+    */
 
         //pub fn cambiar_estado
         //fn set_enviada() //solamente puede ser modificada por el vendedor
@@ -138,6 +143,11 @@ mod contract {
             let id = Uuid::new_v4().to_string();
             Producto{id, nombre, desc: descripcion, precio, categ:categoria}
         }
+
+    /* pub fn new(id: String, nombre: String, descripcion:String, precio:String, categoria: String) -> Producto {
+            Producto { id, nombre, desc: descripcion, precio, categ: categoria }
+            
+        }*/
     }
 
     ///LOGICA DE PUBLICACION
@@ -164,11 +174,20 @@ mod contract {
         pub fn is_activa(&self) -> bool {
             self.activa
         }
+        
+        pub fn actualizar_stock(&mut self, delta: i32) -> Result<(), ErroresApp> {
+        
+        }
+
 
         pub fn new(id_producto:String,id_user: String, stock:u8) -> Publicacion{
             let id= Uuid::new_v4().to_string();
             Publicacion{id, id_prod:id_producto, id_user,stock,activa:true}
         }
+        //nueva implementacion del new de publicacion sin usar uuid
+      /*pub fn new(id: String, id_producto: String, id_user: String, stock: u8) -> Publicacion {
+            Publicacion { id, id_prod: id_producto, id_user, stock, activa: true }
+        } */
     }
 
     /// LOGICA DE DE USUARIO
@@ -237,6 +256,10 @@ mod contract {
             Usuario { id , nombre, mail, rating: Rating::new(), roles}
         }
 
+        //nuevo new de Usuario sin uuid le pasamos el id desde el sistema
+    /*  pub fn new(id: String, nombre: String, mail: String, roles: Vec<String>) -> Usuario {
+            Usuario { id, nombre, mail, rating: Rating::new(), roles }
+} */
         pub fn has_role(&self, rol:&str) ->bool{
             self.roles.contains(&rol.to_string())
         }
@@ -292,6 +315,11 @@ mod contract {
             if let Some(user) = self.users.iter().find(|u|u.id==id_user){
                 if user.roles.contains(&VENDEDOR.to_string()){
                     if let Ok(prod) = self.crear_producto(nombre, descripcion, precio, categoria){
+
+                        //nueva implementacion para no usar uuid
+                    /*  let id = (self.publicaciones.len() + 1).to_string(); 
+                        let p = Publicacion::new(id, prod.id, id_user, stock);*/
+
                         let mut p  = Publicacion::new(prod.id,id_user,stock);
                         self.publicaciones.push(p);
                     };
@@ -306,6 +334,10 @@ mod contract {
         
         fn crear_producto(&mut self, nombre:String,descripcion:String,precio:String, categoria:String) -> Result<Producto,ErroresApp>{
             if self.categorias.try_get(categoria.clone()).is_some(){//verifica la categoria
+                //nueva implementacion para no usar uuid
+            /*  let id = (self.productos.len() + 1).to_string();
+                let p = Producto::new(id, nombre, descripcion, precio, categoria); */
+
                 let p = Producto::new(nombre, descripcion,precio,categoria);
                 self.productos.push(&p);//??
                 Ok(p)
@@ -319,6 +351,13 @@ mod contract {
             if let Some(comprador) = self.users.iter().find(|u|u.id==id_comprador){ //verifica que existe el usuario
                 if let Some(vendedor) = self.users.iter().find(|u|u.id==id_vendedor){
                     if comprador.has_role(COMPRADOR) && vendedor.has_role(VENDEDOR){ //verifica que tienen los roles necesarios
+
+                        //nueva implementacion para no usar uuid
+                    /*  let id = (self.ordenes_historico.len() + 1).to_string();
+                        let o = Orden::new(id, id_vendedor, id_comprador, productos.clone());
+                         */
+
+
                         let o = Orden::new(id_vendedor,id_comprador,productos.clone());
                         for prod in productos.iter(){
                             if let Some(publi) = self.publicaciones.iter_mut().find(|p|*p.id_prod==*prod){
