@@ -33,7 +33,7 @@ mod contract {
         //info de la orden
         id: u32,
         id_vendedor: u32,
-        id_comprador: u32,
+        id_comprador: AccounId,
         status: EstadoOrden,
         productos: Vec<u32>,       //vec con uuid de los productos
         cal_vendedor: Option<u8>,  //calificacion que recibe el vendedor
@@ -56,7 +56,7 @@ mod contract {
 
     impl Orden {
         //nuevo new de orden sin usar uuid pasamos id desde el sistema
-        pub fn new(id: u32, id_vendedor: u32, id_comprador: u32, productos: Vec<u32>) -> Orden {
+        pub fn new(id: u32, id_vendedor: u32, id_comprador: AccountId, productos: Vec<u32>) -> Orden {
             Orden {
                 id,
                 id_vendedor,
@@ -287,7 +287,8 @@ mod contract {
             }
         }
 
-        fn crear_producto(
+        #[ink(message)]
+        pub fn crear_producto(
             &self,
             id: u32,
             nombre: String,
@@ -302,34 +303,46 @@ mod contract {
             todo!("-> Result<Producto, ErroresApp>");
         }
 
+
+
+
+        //REVISAR los usuarios se tienen que manejar con AccountID
         #[ink(message)]
-        pub fn crear_orden(
+        pub fn realizar_orden(
             &mut self,
-            id: u32,
             id_vendedor: u32,
-            id_comprador: u32,
+            //id_comprador: u32,
+            productos: Vec<u32>
+        )-> Result<(),ErroresApp>{//deberia retornar Result?
+            let id_comprador = self.env().caller();
+            return self.crear_orden(id_vendedor, id_comprador, productos);
+        }
+
+        fn crear_orden(
+            &mut self,
+            id_vendedor: u32,
+            id_comprador: AccountId,
             productos: Vec<u32>,
-        ) {
-            if let Some(comprador) = self.users.iter().find(|u| u.id == id_comprador) {
-                //verifica que existe el usuario
-                if let Some(vendedor) = self.users.iter().find(|u| u.id == id_vendedor) {
-                    if comprador.has_role(COMPRADOR) && vendedor.has_role(VENDEDOR) {
-                        //verifica que tienen los roles necesarios
-                        for prod in productos.iter() {
-                            if let Some(publi) =
-                                self.publicaciones.iter_mut().find(|p| p.id_prod == *prod)
-                            {
-                                if publi.stock > 0 {
-                                    todo!("Crear una funcion de Sistema para reducir el stock");
-                                }
+        ) -> Result<(), ErroresApp>{
+            let id = self.ordenes_historico.len().checked_add(1).unwrap_or(0);
+            let comprador = self.user_exists(id_comprador)?;
+            let vendedor = self.user_exists(id_vendedor)?;
+            if comprador.has_role(COMPRADOR) && vendedor.has_role(VENDEDOR) {
+                if !productos.is_empty(){    
+                    for prod in productos.iter() { 
+                        if let Some(publi) =
+                            self.publicaciones.iter().find(|p| p.id_prod == *prod)
+                        {
+                            if publi.stock > 0 { //revisar 
+                                todo!("Crear una funcion de Sistema para reducir el stock");
                             }
-                        }
-                        let orden = Orden::new(id, id_vendedor, id_comprador, productos);
-                        todo!("Generar orden y pusherarla a Sistema");
-                        // self.ordenes_historico.push(&o); ??
+                        }else{todo!("retornar error: el producto no corresponde a una publicacion")}
                     }
-                }
-            }
+                    let orden = Orden::new(id, id_vendedor, id_comprador, productos);
+                    self.ordenes_historico.push(&orden);
+                    Ok(())
+                }else{todo!()}
+            }else{ todo!()}
         }
     }
 }
