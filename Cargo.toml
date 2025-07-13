@@ -10,15 +10,6 @@ edition = "2021"
 ink = { version = "5.1.1", default-features = false }
 base64ct = "1.6.0"
 ink_prelude = "5.1.1"
-cargo-tarpaulin = "0.32.8"
-[dependencies.uuid]
-version = "1.17.0"
-# Lets you generate random UUIDs
-features = [
-    "v4",
-]
-
-
 
 [dev-dependencies]
 ink_e2e = { version = "5.0.0" }
