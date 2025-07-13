@@ -32,6 +32,7 @@ mod contract {
     pub struct Orden {
         //info de la orden
         id: u32,
+        id_publicacion: u32,
         id_vendedor: AccountId,
         id_comprador: AccountId,
         status: EstadoOrden,
@@ -41,24 +42,11 @@ mod contract {
         cal_comprador: Option<u8>, //calificacion que recibe el comprador
     }
 
-    // impl Default for Orden {
-    //     fn default() -> Self {
-    //         Orden {
-    //             id: 0,
-    //             id_vendedor: 0,
-    //             id_comprador: 0,
-    //             status: EstadoOrden::Pendiente,
-    //             productos: Vec::new(),
-    //             cal_vendedor: None,
-    //             cal_comprador: None,
-    //         }
-    //     }
-    // }
-
     impl Orden {
         //nuevo new de orden sin usar uuid pasamos id desde el sistema
         pub fn new(
             id: u32, 
+            id_publicacion: u32,
             id_vendedor: AccountId, 
             id_comprador: AccountId, 
             cantidad:u32,
@@ -66,6 +54,7 @@ mod contract {
         ) -> Orden {
             Orden {
                 id,
+                id_publicacion,
                 id_vendedor,
                 id_comprador,
                 status: EstadoOrden::Pendiente,
@@ -126,7 +115,7 @@ mod contract {
     pub struct Publicacion {
         id: u32,
         id_prod: u32, //id del producto que contiene
-        id_user: u32, //id del user que publica
+        id_user: AccountId, //id del user que publica
         stock: u32,
         activa: bool,
     }
@@ -143,7 +132,7 @@ mod contract {
         // pub fn actualizar_stock(&mut self, delta: i32) -> Result<(), ErroresApp> {}
 
         //nueva implementacion del new de publicacion sin usar uuid
-        pub fn new(id: u32, id_producto: u32, id_user: u32, stock: u32) -> Publicacion {
+        pub fn new(id: u32, id_producto: u32, id_user: AccountId, stock: u32) -> Publicacion {
             Publicacion {
                 id,
                 id_prod: id_producto,
@@ -245,33 +234,25 @@ mod contract {
             //Sistema {}
         }
 
-        /// role related
-        pub fn asociar_rol() {
-            todo!()
-        }
-
-        pub fn has_role() {
-            todo!("verifica que el usuario tiene el rol")
+        fn get_user(&mut self, id:AccountId) -> Result<Usuario,ErroresApp>{
+            todo!("verifica que existe el usuario")
         }
 
         #[ink(message)]
         pub fn registrar_usuario(
             &mut self,
+            id: AccountId,
             nombre: String,
             mail: String,
             roles: Vec<u32>,
-        ) -> Result<u32, ErroresApp> {
+        ) -> Result<(), ErroresApp> {
             //verifico que el email no este asosiado a otra cuenta (que no esta repetido)
             if self.users.iter().any(|u| u.mail == mail) {
                 return Err(ErroresApp::ErrorComun);
             }
-            if let Some(id) = self.users.len().checked_add(1) {
-                let nuevo_usuario = Usuario::new(id as AccountId, nombre, mail, roles);
-                self.users.push(nuevo_usuario);
-                Ok(id as u32)
-            } else {
-                Err(ErroresApp::ErrorComun) // maquetar error
-            }
+            let nuevo_usuario = Usuario::new(id, nombre, mail, roles);
+            self.users.push(nuevo_usuario);
+            Ok(())
         }
 
 
@@ -325,9 +306,6 @@ mod contract {
         pub fn realizar_orden(
             &mut self,
             id_pub: u32,
-            //id_vendedor: u32,
-            //id_comprador: u32,
-            //productos: Vec<u32>
             cantidad:u32,
             precio_total: (u32,u32)
         )-> Result<(),ErroresApp>{//deberia retornar Result?
@@ -337,25 +315,43 @@ mod contract {
 
         fn crear_orden(
             &mut self,
-            //id_vendedor: u32,
             id_pub: u32,
             id_comprador: AccountId,
-            //productos: Vec<u32>,
             cantidad:u32,
             precio_total: (u32,u32)
         ) -> Result<(), ErroresApp>{
-            let id = self.ordenes_historico.len().checked_add(1).unwrap_or(0);
-            let comprador = self.user_exists(id_comprador)?;
-            if let Some(publicacion) = self.publicaciones.iter().find(|p|p.id == id){
-                let vendedor = self.user_exists(publicacion.id_user)?;
-                if comprador.has_role(COMPRADOR) && vendedor.has_role(VENDEDOR) {
-                    if cantidad !=0 && precio_total != (0,0){    
-                        let orden = Orden::new(id, publicacion.id_user, id_comprador, cantidad, precio_total);
+            let id_orden = self.ordenes_historico.len().checked_add(1).unwrap_or(0);
+            let comprador = self.get_user(id_comprador)?;
+            let id_vendedor = self.get_id_vendedor(id_pub)?;
+            let vendedor = self.get_user(id_vendedor)?;
+            let stock = self.get_stock_publicacion(id_pub)?;
+            if comprador.has_role(COMPRADOR) && vendedor.has_role(VENDEDOR){
+                if cantidad !=0 && precio_total != (0,0){
+                    if stock>=cantidad{
+                        let orden = Orden::new(id_orden, id_pub, id_vendedor, id_comprador, cantidad, precio_total);
                         self.ordenes_historico.push(&orden);
                         Ok(())
-                    }else{todo!()}
-                }else{ todo!()}
-            }else{todo!()}
+                    }else{todo!("error: no hay suficiente stock en la publicacion")}
+                }else{todo!("error: la cantidad o el precio no son validos")}
+            }else{ todo!("los usuarios no cumplen con los roles adecuados")}
+        }
+
+        /// Recibe un ID de una publicacion y devuelve AccountId del vendedor asociado o un Error
+        fn get_id_vendedor(&self, id_pub:u32) -> Result<AccountId,ErroresApp>{
+            if let Some(publicacion) = self.publicaciones.iter().find(|p|p.id == id_pub){
+                Ok(publicacion.id_user)
+            }else{
+                todo!("'error de no encontrar la publicacion con el id provisto")
+            }
+        }
+
+        /// Recibe un ID de una publicacion y devuelve su stock
+        fn get_stock_publicacion(&self, id_pub:u32) -> Result<u32,ErroresApp>{
+            if let Some(publicacion) = self.publicaciones.iter().find(|p|p.id == id_pub){
+                Ok(publicacion.stock)
+            }else{
+                todo!("'error de no encontrar la publicacion con el id provisto")
+            }
         }
     }
 }
