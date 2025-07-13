@@ -32,37 +32,47 @@ mod contract {
     pub struct Orden {
         //info de la orden
         id: u32,
-        id_vendedor: u32,
-        id_comprador: AccounId,
+        id_vendedor: AccountId,
+        id_comprador: AccountId,
         status: EstadoOrden,
-        productos: Vec<u32>,       //vec con uuid de los productos
+        cantidad:u32,
+        precio_total: (u32,u32),       
         cal_vendedor: Option<u8>,  //calificacion que recibe el vendedor
         cal_comprador: Option<u8>, //calificacion que recibe el comprador
     }
 
-    impl Default for Orden {
-        fn default() -> Self {
-            Orden {
-                id: 0,
-                id_vendedor: 0,
-                id_comprador: 0,
-                status: EstadoOrden::Pendiente,
-                productos: Vec::new(),
-                cal_vendedor: None,
-                cal_comprador: None,
-            }
-        }
-    }
+    // impl Default for Orden {
+    //     fn default() -> Self {
+    //         Orden {
+    //             id: 0,
+    //             id_vendedor: 0,
+    //             id_comprador: 0,
+    //             status: EstadoOrden::Pendiente,
+    //             productos: Vec::new(),
+    //             cal_vendedor: None,
+    //             cal_comprador: None,
+    //         }
+    //     }
+    // }
 
     impl Orden {
         //nuevo new de orden sin usar uuid pasamos id desde el sistema
-        pub fn new(id: u32, id_vendedor: u32, id_comprador: AccountId, productos: Vec<u32>) -> Orden {
+        pub fn new(
+            id: u32, 
+            id_vendedor: AccountId, 
+            id_comprador: AccountId, 
+            cantidad:u32,
+            precio_total: (u32,u32)
+        ) -> Orden {
             Orden {
                 id,
                 id_vendedor,
                 id_comprador,
-                productos,
-                ..Default::default()
+                status: EstadoOrden::Pendiente,
+                cantidad,
+                precio_total,
+                cal_vendedor: None,
+                cal_comprador: None,
             }
         }
 
@@ -186,7 +196,7 @@ mod contract {
     #[cfg_attr(feature = "std", derive(ink::storage::traits::StorageLayout))]
     #[ink::scale_derive(Encode, Decode, TypeInfo)]
     pub struct Usuario {
-        id: u32,
+        id: AccountId,
         nombre: String,
         mail: String,
         rating: Rating,
@@ -194,7 +204,7 @@ mod contract {
     }
 
     impl Usuario {
-        pub fn new(id: u32, nombre: String, mail: String, roles: Vec<u32>) -> Usuario {
+        pub fn new(id: AccountId, nombre: String, mail: String, roles: Vec<u32>) -> Usuario {
             Usuario {
                 id,
                 nombre,
@@ -256,7 +266,7 @@ mod contract {
                 return Err(ErroresApp::ErrorComun);
             }
             if let Some(id) = self.users.len().checked_add(1) {
-                let nuevo_usuario = Usuario::new(id as u32, nombre, mail, roles);
+                let nuevo_usuario = Usuario::new(id as AccountId, nombre, mail, roles);
                 self.users.push(nuevo_usuario);
                 Ok(id as u32)
             } else {
@@ -264,6 +274,8 @@ mod contract {
             }
         }
 
+
+        //Modificar crear_publicacion para que reciba el id de un producto, la cantidad, y el precio por unidad a vender
         #[ink(message)]
         pub fn crear_publicacion(
             &mut self,
@@ -273,10 +285,11 @@ mod contract {
             precio: String,
             stock: u32,
             categoria: u32,
-            id_user: u32,
+            id_user: AccountId,
         ) {
             if let Some(user) = self.users.iter().find(|u| u.id == id_user) {
                 if user.roles.contains(&VENDEDOR) {
+                    todo!("Crear una funcion de Sistema para reducir el stock");
                     // if let Ok(prod) = self.crear_producto(id, nombre, descripcion, categoria) {
                     //     let p = Publicacion::new(id, prod.id, id_user, stock);
                     //     self.publicaciones.push(p);
@@ -306,43 +319,43 @@ mod contract {
 
 
 
+        //se recibe id de publicacion, el comprador es el caller, la cantidad de productos y el monto que el comprador va a pagar en total el cual hay que validar.
         //REVISAR los usuarios se tienen que manejar con AccountID
         #[ink(message)]
         pub fn realizar_orden(
             &mut self,
-            id_vendedor: u32,
+            id_pub: u32,
+            //id_vendedor: u32,
             //id_comprador: u32,
-            productos: Vec<u32>
+            //productos: Vec<u32>
+            cantidad:u32,
+            precio_total: (u32,u32)
         )-> Result<(),ErroresApp>{//deberia retornar Result?
             let id_comprador = self.env().caller();
-            return self.crear_orden(id_vendedor, id_comprador, productos);
+            return self.crear_orden(id_pub, id_comprador, cantidad, precio_total);
         }
 
         fn crear_orden(
             &mut self,
-            id_vendedor: u32,
+            //id_vendedor: u32,
+            id_pub: u32,
             id_comprador: AccountId,
-            productos: Vec<u32>,
+            //productos: Vec<u32>,
+            cantidad:u32,
+            precio_total: (u32,u32)
         ) -> Result<(), ErroresApp>{
             let id = self.ordenes_historico.len().checked_add(1).unwrap_or(0);
             let comprador = self.user_exists(id_comprador)?;
-            let vendedor = self.user_exists(id_vendedor)?;
-            if comprador.has_role(COMPRADOR) && vendedor.has_role(VENDEDOR) {
-                if !productos.is_empty(){    
-                    for prod in productos.iter() { 
-                        if let Some(publi) =
-                            self.publicaciones.iter().find(|p| p.id_prod == *prod)
-                        {
-                            if publi.stock > 0 { //revisar 
-                                todo!("Crear una funcion de Sistema para reducir el stock");
-                            }
-                        }else{todo!("retornar error: el producto no corresponde a una publicacion")}
-                    }
-                    let orden = Orden::new(id, id_vendedor, id_comprador, productos);
-                    self.ordenes_historico.push(&orden);
-                    Ok(())
-                }else{todo!()}
-            }else{ todo!()}
+            if let Some(publicacion) = self.publicaciones.iter().find(|p|p.id == id){
+                let vendedor = self.user_exists(publicacion.id_user)?;
+                if comprador.has_role(COMPRADOR) && vendedor.has_role(VENDEDOR) {
+                    if cantidad !=0 && precio_total != (0,0){    
+                        let orden = Orden::new(id, publicacion.id_user, id_comprador, cantidad, precio_total);
+                        self.ordenes_historico.push(&orden);
+                        Ok(())
+                    }else{todo!()}
+                }else{ todo!()}
+            }else{todo!()}
         }
     }
 }
