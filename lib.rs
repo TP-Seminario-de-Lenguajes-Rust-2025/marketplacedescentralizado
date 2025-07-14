@@ -124,21 +124,36 @@ mod contract {
     #[ink::scale_derive(Encode, Decode, TypeInfo)]
     pub struct Producto {
         id: u32,
+        id_vendedor: AccountId,
         nombre: String,
         descripcion: String,
         categoria: u32,
+        stock: u32
     }
 
     impl Producto {
-        pub fn new(id: u32, nombre: String, descripcion: String, categoria: u32) -> Producto {
+        pub fn new(id: u32, id_vendedor: AccountId, nombre: String, descripcion: String, categoria: u32, stock: u32) -> Producto {
             //TODO: verificar que stock>0 y precio>0 y nombre y desc sean validos
             Producto {
                 id,
+                id_vendedor,
                 nombre,
                 descripcion,
                 categoria,
+                stock
             }
         }
+
+        pub fn eq(&self, p:&Producto) -> bool{
+            if 
+                self.nombre == p.nombre &&
+                self.categoria == p.categoria
+            {
+                return true 
+            }
+            return false
+        }
+        //Validar unicidad por nombre o categoría + nombre al registrar un producto nuevo.
     }
 
     ///LOGICA DE PUBLICACION
@@ -295,43 +310,94 @@ mod contract {
         #[ink(message)]
         pub fn crear_publicacion(
             &mut self,
-            id: u32,
-            nombre: String,
-            descripcion: String,
-            precio: String,
+            id_producto: u32,
             stock: u32,
-            categoria: u32,
-            id_user: AccountId,
-        ) {
-            if let Some(user) = self.users.iter().find(|u| u.id == id_user) {
-                if user.roles.contains(&VENDEDOR) {
-                    todo!("Crear una funcion de Sistema para reducir el stock");
-                    // if let Ok(prod) = self.crear_producto(id, nombre, descripcion, categoria) {
-                    //     let p = Publicacion::new(id, prod.id, id_user, stock);
-                    //     self.publicaciones.push(p);
-                    // }; Se tiene que crear aparte.
-                }
-            } else {
-                todo!("error");
-            }
+            precio: Decimal,
+        ) -> Result<(),ErroresApp>{
+            let id_usuario = self.env().caller();
+            return self._crear_publicacion(id_producto, id_usuario, stock, precio)
         }
+        fn _crear_publicacion(
+            &mut self,
+            id_producto: u32,
+            id_usuario: AccountId,
+            stock: u32,
+            precio: Decimal,            
+        ) -> Result<(),ErroresApp> {
+            let id = self.publicaciones.len().checked_add(1).expect("se lleno el vector de publicaciones xd") as u32;
+            let usuario = self.get_user(id_usuario)?;
+            if usuario.has_role(VENDEDOR){
+                if let Some(index) = id_producto.checked_sub(1){
+                    if let Some(producto) = self.productos.get(index){
+                        self.descontar_stock_producto(id_producto, stock)?;
+                        let p = Publicacion::new(id, id_producto, id_usuario, stock, precio);
+                        self.publicaciones.push(p);
+                        Ok(())
+                    }else{todo!("error: no habia producto en el indice provisto")}
+                }else{todo!("error: indice invalido (<0)")}
+            } else {todo!("error: usuario no tiene el rol apropiado")}
+        }
+
+        fn descontar_stock_producto(&mut self, id:u32, cantidad:u32) -> Result<(), ErroresApp>{
+            if let Some(index) = id.checked_sub(1){
+                if let Some(producto) = self.productos.get(index){// necesito conseguir una referencia mutable de alguna manera
+                    todo!("terminar la logica de la funcion")
+                }else{todo!("error: indice vacio")}
+            }else{todo!("error: id invalida")}
+        }
+
+        // fn get_mut_producto(&mut self, id:u32) -> Result<&mut Producto, ErroresApp>{
+        //     if let Some(index) = id.checked_sub(1){
+        //         Ok(&mut self.productos.get(index).expect("indice vacio"))
+        //     }else{todo!("error: invalid index (<0)")}
+        // }
 
         #[ink(message)]
         pub fn crear_producto(
-            &self,
+            &mut self,
             id: u32,
             nombre: String,
             descripcion: String,
             categoria: u32,
-        ) -> Producto {
-            if self.categorias.try_get(categoria).is_some() {
-                Producto::new(id, nombre, descripcion, categoria);
-                // let producto = Producto::new(id, nombre, descripcion, categoria);
-                // return Ok(producto);
-            }
-            todo!("-> Result<Producto, ErroresApp>");
+            stock: u32
+        ) -> Result<(),ErroresApp> {
+            let id_vendedor = self.env().caller();
+            return self._crear_producto(id, id_vendedor, nombre, descripcion, categoria, stock)
         }
 
+        fn _crear_producto(
+            &mut self,
+            id: u32,
+            id_vendedor: AccountId,
+            nombre: String,
+            descripcion: String,
+            categoria: u32,
+            stock: u32
+        ) -> Result<(),ErroresApp> {
+            let usuario = self.get_user(id_vendedor)?;
+            if usuario.has_role(VENDEDOR){
+                if self.categorias.try_get(categoria).is_some() {  
+                    let producto = Producto::new(id, id_vendedor, nombre, descripcion, categoria, stock);
+                    if !self.producto_existe(&producto){
+                        self.productos.push(&producto);
+                        Ok(())
+                    }else{todo!("error: el producto ya existe")}
+                }else{todo!("error: no se encuentra la categoria")}
+            }else{todo!("error: el usuario no es un vendedor")}
+        }
+
+        fn producto_existe(&self, p:&Producto) -> bool{
+            todo!(
+                "for i in StorageVec<Producto>{
+                    if i.eq(p){
+                        return true
+                    }
+                }
+                return false"
+            )
+        }
+
+        //Validar unicidad por nombre o categoría + nombre al registrar un producto nuevo.
 
 
 
@@ -354,15 +420,16 @@ mod contract {
             cantidad:u32,
             //precio_total: Decimal//esto deberia estar por parametro???
         ) -> Result<(), ErroresApp>{
-            let id_orden = self.ordenes_historico.len().checked_add(1).unwrap_or(0);
+            let id_orden = self.ordenes_historico.len().checked_add(1).expect("se lleno el vector de ordenes xd");
             let comprador = self.get_user(id_comprador)?;
             let id_vendedor = self.get_id_vendedor(id_pub)?;
             let vendedor = self.get_user(id_vendedor)?;
-            let stock = self.get_stock_publicacion(id_pub)?;
+            //let stock = self.get_stock_publicacion(id_pub)?;
             let precio_producto = self.get_precio_unitario(id_pub)?;
             let precio_total = precio_producto.mult(cantidad);
             if comprador.has_role(COMPRADOR) && vendedor.has_role(VENDEDOR){
-                if cantidad !=0 && stock>=cantidad{
+                if cantidad !=0{
+                    self.descontar_stock_publicacion(id_pub, cantidad)?;
                     let orden = Orden::new(id_orden, id_pub, id_vendedor, id_comprador, cantidad, precio_total);
                     self.ordenes_historico.push(&orden);
                     Ok(())                
@@ -380,21 +447,30 @@ mod contract {
             }
         }
 
-        /// Recibe un ID de una publicacion y devuelve su stock
-        fn get_stock_publicacion(&self, id_pub:u32) -> Result<u32,ErroresApp>{
-            if let Some(publicacion) = self.publicaciones.iter().find(|p|p.id == id_pub){
-                Ok(publicacion.stock)
-            }else{
-                todo!("'error de no encontrar la publicacion con el id provisto")
-            }
+        fn descontar_stock_publicacion(&mut self, id_pub:u32, cantidad:u32) -> Result<(),ErroresApp>{
+            if let Some(index) = id_pub.checked_sub(1){
+                if let Some(publicacion) = self.publicaciones.get(index){//??? porque devuelve un slice si le estoy pasando una posicion?????
+                    let res = publicacion.stock.checked_sub(cantidad);
+                    if res.is_none(){todo!("error: la publicacion no tiene stock suficiente")}
+                }else{todo!("error: indice vacio")}
+            }else{todo!("error: indice invalido (<0)")}
         }
+
+        /// Recibe un ID de una publicacion y devuelve su stock
+        // fn get_stock_publicacion(&self, id_pub:u32) -> Result<u32,ErroresApp>{
+        //     if let Some(publicacion) = self.publicaciones.iter().find(|p|p.id == id_pub){
+        //         Ok(publicacion.stock)
+        //     }else{
+        //         todo!("error: no encontrar la publicacion con el id provisto")
+        //     }
+        // }
 
         /// Recibe un ID de una publicacion y devuelve su stock
         fn get_precio_unitario(&self, id_pub:u32) -> Result<Decimal,ErroresApp>{
             if let Some(publicacion) = self.publicaciones.iter().find(|p|p.id == id_pub){
                 Ok(publicacion.precio_unitario)
             }else{
-                todo!("'error de no encontrar la publicacion con el id provisto")
+                todo!("error: no encontrar la publicacion con el id provisto")
             }
         }
 
