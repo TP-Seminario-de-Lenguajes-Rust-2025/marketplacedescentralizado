@@ -19,18 +19,24 @@ mod contrato {
     }
 
     #[derive(Encode, Decode, TypeInfo, Debug)]
+    pub enum Roles {
+        Comprador,
+        Vendedor,
+    }
+
+    #[derive(Encode, Decode, TypeInfo, Debug)]
     #[cfg_attr(feature = "std", derive(StorageLayout))]
     pub struct Usuario {
         nombre: String,
         mail: String,
-        roles: Vec<String>,
+        roles: Vec<Roles>,
     }
 
     #[ink(storage)]
     pub struct Contrato {
         value: bool,
         map_usuarios: Mapping<AccountId, Usuario>,
-        vec_usuarios: StorageVec<AccountId>,
+        vec_usuarios: Vec<AccountId>,
     }
 
     impl Contrato {
@@ -40,7 +46,7 @@ mod contrato {
             Self {
                 value: init_value,
                 map_usuarios: Mapping::default(),
-                vec_usuarios: StorageVec::default(),
+                vec_usuarios: Vec::default(),
             }
         }
 
@@ -49,27 +55,23 @@ mod contrato {
             Self::new(Default::default())
         }
 
-        /// A message that can be called on instantiated contracts.
-        /// This one flips the value of the stored `bool` from `true`
-        /// to `false` and vice versa.
-        #[ink(message)]
-        pub fn flip(&mut self) {
-            self.value = !self.value;
-        }
-
-        /// Simply returns the current value of our `bool`.
-        #[ink(message)]
-        pub fn get(&self) -> bool {
-            self.value
-        }
-
         #[ink(message)]
         pub fn registrar_usuario(
+            &mut self,
+            nombre: String,
+            mail: String,
+            roles: Vec<Roles>,
+        ) -> Result<String, MiError> {
+            let id_usuario = self.env().caller();
+            return self._registrar_usuario(id_usuario, nombre, mail, roles);
+        }
+
+        fn _registrar_usuario(
             &mut self,
             account_id: AccountId,
             nombre: String,
             mail: String,
-            roles: Vec<String>,
+            roles: Vec<Roles>,
         ) -> Result<String, MiError> {
             // Verifico que el usuario no exista
             if self.existe_usuario(&account_id) {
@@ -84,32 +86,11 @@ mod contrato {
                 roles: roles,
             };
             self.insertar_usuario(account_id, user)?;
-            Ok(nombre)
+            Ok(format!(
+                "El usuario {} fue registrado correctamente",
+                nombre
+            ))
             // Verifico que el mail no este en uso
-        }
-
-        /// Inserta un usuario si su id no existe aún
-        #[ink(message)]
-        pub fn eliminar_usuario(&mut self, account_id: AccountId) -> Result<(), MiError> {
-            if !self.map_usuarios.contains(account_id) {
-                return Err(MiError::UsuarioInexistente);
-            }
-
-            // Eliminar del mapa
-            self.map_usuarios.remove(account_id);
-
-            // Eliminar del vector
-            let mut nuevo_vec = StorageVec::new();
-            for i in 0..self.vec_usuarios.len() {
-                if let Some(id) = self.vec_usuarios.get(i) {
-                    if id != account_id {
-                        nuevo_vec.push(&id);
-                    }
-                }
-            }
-            self.vec_usuarios = nuevo_vec;
-
-            Ok(())
         }
 
         #[ink(message)]
@@ -125,28 +106,10 @@ mod contrato {
             resultado
         }
 
-        #[ink(message)]
-        pub fn debug_usuarios(&self) {
-            for i in 0..self.vec_usuarios.len() {
-                if let Some(account_id) = self.vec_usuarios.get(i) {
-                    if let Some(usuario) = self.map_usuarios.get(account_id) {
-                        ink::env::debug_println!(
-                            "Usuario: {:?}, Mail: {:?}",
-                            usuario.nombre,
-                            usuario.mail
-                        );
-                    }
-                }
-            }
-        }
         /// Inserta un usuario si su id no existe aún
         fn insertar_usuario(&mut self, id: AccountId, usuario: Usuario) -> Result<(), MiError> {
-            if self.map_usuarios.contains(id) {
-                return Err(MiError::UsuarioYaExistente);
-            }
-
             self.map_usuarios.insert(id, &usuario);
-            self.vec_usuarios.push(&id);
+            self.vec_usuarios.push(id);
             Ok(())
         }
 
@@ -168,6 +131,30 @@ mod contrato {
         fn existe_usuario(&self, id: &AccountId) -> bool {
             self.map_usuarios.contains(id)
         }
+
+        // /// Inserta un usuario si su id no existe aún
+        // #[ink(message)]
+        // pub fn eliminar_usuario(&mut self, account_id: AccountId) -> Result<(), MiError> {
+        //     if !self.map_usuarios.contains(account_id) {
+        //         return Err(MiError::UsuarioInexistente);
+        //     }
+
+        //     // Eliminar del mapa
+        //     self.map_usuarios.remove(account_id);
+
+        //     // Eliminar del vector
+        //     let mut nuevo_vec = Vec::new();
+        //     for i in 0..self.vec_usuarios.len() {
+        //         if let Some(id) = self.vec_usuarios.get(i) {
+        //             if *id != account_id {
+        //                 nuevo_vec.push(id);
+        //             }
+        //         }
+        //     }
+        //     self.vec_usuarios = nuevo_vec;
+
+        //     Ok(())
+        // }
     }
 
     /// Unit tests in Rust are normally defined within such a `#[cfg(test)]`
@@ -182,16 +169,16 @@ mod contrato {
         #[ink::test]
         fn default_works() {
             let contrato = Contrato::default();
-            assert_eq!(contrato.get(), false);
+            //assert_eq!(contrato.get(), false);
         }
 
         /// We test a simple use case of our contract.
         #[ink::test]
         fn it_works() {
             let mut contrato = Contrato::new(false);
-            assert_eq!(contrato.get(), false);
-            contrato.flip();
-            assert_eq!(contrato.get(), true);
+            //assert_eq!(contrato.get(), false);
+            //contrato.flip();
+            //assert_eq!(contrato.get(), true);
         }
     }
 
