@@ -449,7 +449,7 @@ mod contract {
 
         fn descontar_stock_publicacion(&mut self, id_pub:u32, cantidad:u32) -> Result<(),ErroresApp>{
             if let Some(index) = id_pub.checked_sub(1){
-                if let Some(publicacion) = self.publicaciones.get(index){//??? porque devuelve un slice si le estoy pasando una posicion?????
+                if let Some(publicacion) = self.publicaciones.get(index as usize){//??? porque devuelve un slice si le estoy pasando una posicion?????
                     let res = publicacion.stock.checked_sub(cantidad);
                     if res.is_none(){todo!("error: la publicacion no tiene stock suficiente")
                     }else{todo!("descuenta el stock ( capaz tendria que ir todo esto en otr if let mas?)")}
