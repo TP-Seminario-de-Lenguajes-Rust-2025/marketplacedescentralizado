@@ -10,8 +10,39 @@ mod contract {
     const COMPRADOR: u32 = 1;
     const VENDEDOR: u32 = 2;
 
-    ///LOGICA DE ORDEN
-    ///
+    #[derive(Clone,Copy)]
+    struct Decimal{
+        entero: u32,
+        decimal:u32
+    }
+
+    impl Decimal{
+        fn mult(&self, multiplicador: u32) -> Decimal{
+            let mut entero: u32 = self.entero*multiplicador;
+            let mut decimal: u32 = self.decimal*multiplicador;
+            if decimal.length()> self.decimal.length(){
+                entero += decimal/self.decimal.length()*10;
+                decimal = decimal%self.decimal.length()*10;
+            }
+            Decimal{entero, decimal}
+        }
+    }
+    
+    trait Lengthable{
+        fn length(&self) -> u32;
+    }
+
+    impl Lengthable for u32{
+        fn length(&self) -> u32{
+            let mut n = *self;
+            let mut c: u32 = 0;
+            while n!=0 as u32{
+                n=n/10 as u32;
+                c+=1;
+            }
+            c
+        }
+    }
 
     #[ink::scale_derive(Encode, Decode, TypeInfo)]
     pub enum ErroresApp {
@@ -37,7 +68,7 @@ mod contract {
         id_comprador: AccountId,
         status: EstadoOrden,
         cantidad:u32,
-        precio_total: (u32,u32),       
+        precio_total: Decimal,       
         cal_vendedor: Option<u8>,  //calificacion que recibe el vendedor
         cal_comprador: Option<u8>, //calificacion que recibe el comprador
     }
@@ -50,7 +81,7 @@ mod contract {
             id_vendedor: AccountId, 
             id_comprador: AccountId, 
             cantidad:u32,
-            precio_total: (u32,u32)
+            precio_total: Decimal
         ) -> Orden {
             Orden {
                 id,
@@ -117,6 +148,7 @@ mod contract {
         id_prod: u32, //id del producto que contiene
         id_user: AccountId, //id del user que publica
         stock: u32,
+        precio_unitario: Decimal,
         activa: bool,
     }
 
@@ -132,12 +164,13 @@ mod contract {
         // pub fn actualizar_stock(&mut self, delta: i32) -> Result<(), ErroresApp> {}
 
         //nueva implementacion del new de publicacion sin usar uuid
-        pub fn new(id: u32, id_producto: u32, id_user: AccountId, stock: u32) -> Publicacion {
+        pub fn new(id: u32, id_producto: u32, id_user: AccountId, stock: u32, precio_unitario:Decimal) -> Publicacion {
             Publicacion {
                 id,
                 id_prod: id_producto,
                 id_user,
                 stock,
+                precio_unitario,
                 activa: true,
             }
         }
@@ -301,16 +334,15 @@ mod contract {
 
 
         //se recibe id de publicacion, el comprador es el caller, la cantidad de productos y el monto que el comprador va a pagar en total el cual hay que validar.
-        //REVISAR los usuarios se tienen que manejar con AccountID
         #[ink(message)]
         pub fn realizar_orden(
             &mut self,
             id_pub: u32,
             cantidad:u32,
-            precio_total: (u32,u32)
-        )-> Result<(),ErroresApp>{//deberia retornar Result?
+            //precio_total: Decimal
+        )-> Result<(),ErroresApp>{
             let id_comprador = self.env().caller();
-            return self.crear_orden(id_pub, id_comprador, cantidad, precio_total);
+            return self.crear_orden(id_pub, id_comprador, cantidad);
         }
 
         fn crear_orden(
@@ -318,23 +350,24 @@ mod contract {
             id_pub: u32,
             id_comprador: AccountId,
             cantidad:u32,
-            precio_total: (u32,u32)
+            //precio_total: Decimal//esto deberia estar por parametro???
         ) -> Result<(), ErroresApp>{
             let id_orden = self.ordenes_historico.len().checked_add(1).unwrap_or(0);
             let comprador = self.get_user(id_comprador)?;
             let id_vendedor = self.get_id_vendedor(id_pub)?;
             let vendedor = self.get_user(id_vendedor)?;
             let stock = self.get_stock_publicacion(id_pub)?;
+            let precio_producto = self.get_precio_unitario(id_pub)?;
+            let precio_total = precio_producto.mult(cantidad);
             if comprador.has_role(COMPRADOR) && vendedor.has_role(VENDEDOR){
-                if cantidad !=0 && precio_total != (0,0){
-                    if stock>=cantidad{
-                        let orden = Orden::new(id_orden, id_pub, id_vendedor, id_comprador, cantidad, precio_total);
-                        self.ordenes_historico.push(&orden);
-                        Ok(())
-                    }else{todo!("error: no hay suficiente stock en la publicacion")}
-                }else{todo!("error: la cantidad o el precio no son validos")}
-            }else{ todo!("los usuarios no cumplen con los roles adecuados")}
+                if cantidad !=0 && stock>=cantidad{
+                    let orden = Orden::new(id_orden, id_pub, id_vendedor, id_comprador, cantidad, precio_total);
+                    self.ordenes_historico.push(&orden);
+                    Ok(())                
+                }else{todo!("error: la cantidad es mayor a cero y hay stock suficiente")}
+            }else{ todo!("error: los usuarios no cumplen con los roles adecuados")}
         }
+
 
         /// Recibe un ID de una publicacion y devuelve AccountId del vendedor asociado o un Error
         fn get_id_vendedor(&self, id_pub:u32) -> Result<AccountId,ErroresApp>{
@@ -353,5 +386,16 @@ mod contract {
                 todo!("'error de no encontrar la publicacion con el id provisto")
             }
         }
+
+        /// Recibe un ID de una publicacion y devuelve su stock
+        fn get_precio_unitario(&self, id_pub:u32) -> Result<Decimal,ErroresApp>{
+            if let Some(publicacion) = self.publicaciones.iter().find(|p|p.id == id_pub){
+                Ok(publicacion.precio_unitario)
+            }else{
+                todo!("'error de no encontrar la publicacion con el id provisto")
+            }
+        }
+
+        
     }
 }
