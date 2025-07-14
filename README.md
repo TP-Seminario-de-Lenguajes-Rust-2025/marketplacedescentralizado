@@ -1,4 +1,4 @@
-# Trabajo Práctico Final – Marketplace Descentralizado tipo MercadoLibre
+# Trabajo Práctico Final – Marketplace Descentralizado
 
 **Materia:** Seminario de Lenguajes – Opción Rust  
 **Tecnología:** Rust + Ink! + Substrate  
@@ -6,6 +6,8 @@
 **Entregas:**  
 - ⭕ Primera entrega obligatoria: **18 de julio**  
 - ✅ Entrega final completa: **Antes de finalizar 2025**
+
+<img width="8334" height="4167" alt="image" src="https://github.com/user-attachments/assets/9bc5857c-5349-45ab-9e2b-a3edac75840b" />
 
 ---
 
