@@ -11,10 +11,9 @@ mod contrato {
 
     #[derive(Encode, Decode, TypeInfo, Debug)]
     pub enum ErroresContrato {
-        NoRegistrado,
         NoAutorizado,
         UsuarioYaExistente,
-        UsuarioInexistente,
+        CuentaNoRegistrada,
         MailYaExistente,
         SeFueALaMierdaElID,
     }
@@ -107,7 +106,9 @@ mod contrato {
         ) -> Result<String, ErroresContrato> {
             // Comprobar que el usuario esta registrado en la plataforma
             let id_cuenta = self.env().caller();
-            self.existe_usuario(&id_cuenta)?;
+            if !self.existe_usuario(&id_cuenta) {
+                return Err(ErroresContrato::CuentaNoRegistrada)
+            };
             // Comprobar que el producto no exista chequeando nombre y categoria
             // Agregar producto
             let id = self
@@ -161,9 +162,13 @@ mod contrato {
             mail: String,
             roles: Vec<Roles>,
         ) -> Result<String, ErroresContrato> {
-            // Verifico que el usuario y el mail no exist
-            self.existe_usuario(&account_id)?;
-            self.existe_mail(&mail)?;
+            // Verifico que el usuario y el mail no existan
+            if self.existe_usuario(&account_id) {
+                return Err(ErroresContrato::UsuarioYaExistente)
+            };
+            if self.existe_mail(&mail) {
+                return Err(ErroresContrato::MailYaExistente)
+            };
 
             // Instancio nuevo usuario
             let user = Usuario {
@@ -209,32 +214,32 @@ mod contrato {
         }
 
         /// Verifica si ya existe un usuario con el mail dado
-        fn existe_mail(&self, mail: &str) -> Result<(), ErroresContrato> {
+        fn existe_mail(&self, mail: &str) -> bool {
             for i in 0..self.vec_usuarios.len() {
                 if let Some(account_id) = self.vec_usuarios.get(i) {
                     if let Some(usuario) = self.map_usuarios.get(account_id) {
                         if usuario.mail == mail {
-                            return Err(ErroresContrato::MailYaExistente);
+                            return true;
                         }
                     }
                 }
             }
-            Ok(())
+            false
         }
 
         /// Verifica si existe un usuario con el AccountId dado
-        fn existe_usuario(&self, id: &AccountId) -> Result<(), ErroresContrato> {
-            if self.map_usuarios.contains(id) {
-                return Err(ErroresContrato::UsuarioInexistente)
+        fn existe_usuario(&self, id: &AccountId) -> bool {
+            if !self.map_usuarios.contains(id) {
+                return false
             }
-            Ok(())
+            true
         }
 
         // /// Inserta un usuario si su id no existe aún
         // #[ink(message)]
         // pub fn eliminar_usuario(&mut self, account_id: AccountId) -> Result<(), ErroresContrato> {
         //     if !self.map_usuarios.contains(account_id) {
-        //         return Err(ErroresContrato::UsuarioInexistente);
+        //         return Err(ErroresContrato::CuentaNoRegistrada);
         //     }
 
         //     // Eliminar del mapa
