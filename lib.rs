@@ -11,6 +11,7 @@ mod contrato {
 
     #[derive(Encode, Decode, TypeInfo, Debug)]
     pub enum ErroresContrato {
+        NoRegistrado,
         NoAutorizado,
         UsuarioYaExistente,
         UsuarioInexistente,
@@ -47,6 +48,7 @@ mod contrato {
     #[cfg_attr(feature = "std", derive(StorageLayout))]
 
     pub struct Producto {
+        id: u128,
         nombre: String,
         categoria: Categoria,
         cantidad: u32,
@@ -103,22 +105,28 @@ mod contrato {
             precio: Balance,
             descripcion: String,
         ) -> Result<String, ErroresContrato> {
+            // Comprobar que el usuario esta registrado en la plataforma
+            let id_cuenta = self.env().caller();
+            self.existe_usuario(&id_cuenta)?;
             // Comprobar que el producto no exista chequeando nombre y categoria
             // Agregar producto
+            let id = self
+                .actual_id_prod
+                .checked_add(1)
+                .ok_or(ErroresContrato::SeFueALaMierdaElID)?;
+
             let nuevo_producto = Producto {
+                id,
                 nombre,
                 categoria,
                 cantidad,
                 precio,
                 descripcion,
             };
-            let id_producto = self
-                .actual_id_prod
-                .checked_add(1)
-                .ok_or(ErroresContrato::SeFueALaMierdaElID)?;
-            self.map_productos.insert(id_producto, &nuevo_producto);
-            self.vec_productos.push(id_producto);
-            self.actual_id_prod = id_producto;
+
+            self.map_productos.insert(id, &nuevo_producto);
+            self.vec_productos.push(id);
+            self.actual_id_prod = id;
             Ok(nuevo_producto.nombre)
         }
 
@@ -153,14 +161,11 @@ mod contrato {
             mail: String,
             roles: Vec<Roles>,
         ) -> Result<String, ErroresContrato> {
-            // Verifico que el usuario no exista
-            if self.existe_usuario(&account_id) {
-                return Err(ErroresContrato::UsuarioYaExistente);
-            }
-            // Verifico que el mail no este en uso
-            if self.existe_mail(&mail) {
-                return Err(ErroresContrato::MailYaExistente);
-            }
+            // Verifico que el usuario y el mail no exist
+            self.existe_usuario(&account_id)?;
+            self.existe_mail(&mail)?;
+
+            // Instancio nuevo usuario
             let user = Usuario {
                 mail: mail,
                 nombre: nombre.clone(),
@@ -168,7 +173,7 @@ mod contrato {
             };
 
             // Inserto el usuario tanto en el Mapping como en el Vec
-            self.insertar_usuario(account_id, user)?;
+            self.insertar_usuario(account_id, user);
 
             // Genero el mensaje de retorno
             let retorno = {
@@ -193,34 +198,36 @@ mod contrato {
             resultado
         }
 
-        /// Inserta un usuario si su id no existe aún
+        /// Inserta un usuario
         fn insertar_usuario(
             &mut self,
             id: AccountId,
             usuario: Usuario,
-        ) -> Result<(), ErroresContrato> {
+        ) {
             self.map_usuarios.insert(id, &usuario);
             self.vec_usuarios.push(id);
-            Ok(())
         }
 
         /// Verifica si ya existe un usuario con el mail dado
-        fn existe_mail(&self, mail: &str) -> bool {
+        fn existe_mail(&self, mail: &str) -> Result<(), ErroresContrato> {
             for i in 0..self.vec_usuarios.len() {
                 if let Some(account_id) = self.vec_usuarios.get(i) {
                     if let Some(usuario) = self.map_usuarios.get(account_id) {
                         if usuario.mail == mail {
-                            return true;
+                            return Err(ErroresContrato::MailYaExistente);
                         }
                     }
                 }
             }
-            false
+            Ok(())
         }
 
         /// Verifica si existe un usuario con el AccountId dado
-        fn existe_usuario(&self, id: &AccountId) -> bool {
-            self.map_usuarios.contains(id)
+        fn existe_usuario(&self, id: &AccountId) -> Result<(), ErroresContrato> {
+            if self.map_usuarios.contains(id) {
+                return Err(ErroresContrato::UsuarioInexistente)
+            }
+            Ok(())
         }
 
         // /// Inserta un usuario si su id no existe aún
@@ -270,77 +277,6 @@ mod contrato {
             //assert_eq!(contrato.get(), false);
             //contrato.flip();
             //assert_eq!(contrato.get(), true);
-        }
-    }
-
-    /// This is how you'd write end-to-end (E2E) or integration tests for ink! contracts.
-    ///
-    /// When running these you need to make sure that you:
-    /// - Compile the tests with the `e2e-tests` feature flag enabled (`--features e2e-tests`)
-    /// - Are running a Substrate node which contains `pallet-contracts` in the background
-    #[cfg(all(test, feature = "e2e-tests"))]
-    mod e2e_tests {
-        /// Imports all the definitions from the outer scope so we can use them here.
-        use super::*;
-
-        /// A helper function used for calling contract messages.
-        use ink_e2e::ContractsBackend;
-
-        /// The End-to-End test `Result` type.
-        type E2EResult<T> = std::result::Result<T, Box<dyn std::error::Error>>;
-
-        /// We test that we can upload and instantiate the contract using its default constructor.
-        #[ink_e2e::test]
-        async fn default_works(mut client: ink_e2e::Client<C, E>) -> E2EResult<()> {
-            // Given
-            let mut constructor = ContratoRef::default();
-
-            // When
-            let contract = client
-                .instantiate("contrato", &ink_e2e::alice(), &mut constructor)
-                .submit()
-                .await
-                .expect("instantiate failed");
-            let call_builder = contract.call_builder::<Contrato>();
-
-            // Then
-            let get = call_builder.get();
-            let get_result = client.call(&ink_e2e::alice(), &get).dry_run().await?;
-            assert!(matches!(get_result.return_value(), false));
-
-            Ok(())
-        }
-
-        /// We test that we can read and write a value from the on-chain contract.
-        #[ink_e2e::test]
-        async fn it_works(mut client: ink_e2e::Client<C, E>) -> E2EResult<()> {
-            // Given
-            let mut constructor = ContratoRef::new(false);
-            let contract = client
-                .instantiate("contrato", &ink_e2e::bob(), &mut constructor)
-                .submit()
-                .await
-                .expect("instantiate failed");
-            let mut call_builder = contract.call_builder::<Contrato>();
-
-            let get = call_builder.get();
-            let get_result = client.call(&ink_e2e::bob(), &get).dry_run().await?;
-            assert!(matches!(get_result.return_value(), false));
-
-            // When
-            let flip = call_builder.flip();
-            let _flip_result = client
-                .call(&ink_e2e::bob(), &flip)
-                .submit()
-                .await
-                .expect("flip failed");
-
-            // Then
-            let get = call_builder.get();
-            let get_result = client.call(&ink_e2e::bob(), &get).dry_run().await?;
-            assert!(matches!(get_result.return_value(), true));
-
-            Ok(())
         }
     }
 }
