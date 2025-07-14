@@ -20,8 +20,8 @@ mod contrato {
 
     #[derive(Encode, Decode, TypeInfo, Debug)]
     pub enum Roles {
-        Comprador,
-        Vendedor,
+        COMPRADOR,
+        VENDEDOR,
     }
 
     #[derive(Encode, Decode, TypeInfo, Debug)]
@@ -38,6 +38,17 @@ mod contrato {
         map_usuarios: Mapping<AccountId, Usuario>,
         vec_usuarios: Vec<AccountId>,
     }
+
+    //TODO:
+    // Faltarian agregar los siguientes metodos publicos (ink-messages) para exponer la interfaz:
+
+    // - publicar_producto (solo si tiene rol VENDEDOR)
+    // - ver_productos_publicados (solo si tiene rol VENDEDOR)
+    // - enviar_producto (solo si tiene rol VENDEDOR)
+
+    // - comprar_producto (solo si tiene rol COMPRADOR)
+    // - marcar_como_recibido (solo si tiene rol COMPRADOR)
+    // - cancelar_compra (solo si tiene rol COMPRADOR)
 
     impl Contrato {
         /// Constructor that initializes the `bool` value to the given `init_value`.
