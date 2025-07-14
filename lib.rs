@@ -5,23 +5,34 @@ mod contrato {
     use ink::prelude::string::String;
     use ink::storage::traits::StorageLayout;
     use ink::storage::Mapping;
-    use ink::storage::StorageVec;
     use scale::{Decode, Encode};
     use scale_info::prelude::vec::Vec;
     use scale_info::TypeInfo;
 
     #[derive(Encode, Decode, TypeInfo, Debug)]
-    pub enum MiError {
+    pub enum ErroresContrato {
         NoAutorizado,
         UsuarioYaExistente,
         UsuarioInexistente,
         MailYaExistente,
+        SeFueALaMierdaElID,
     }
 
     #[derive(Encode, Decode, TypeInfo, Debug)]
+    #[cfg_attr(feature = "std", derive(StorageLayout))]
+    pub enum Categoria {
+        Bazar,
+        Hogar,
+        Electronica,
+        FalopaDeLaRica,
+        Otros,
+    }
+
+    #[derive(Encode, Decode, TypeInfo, Debug)]
+    #[cfg_attr(feature = "std", derive(StorageLayout))]
     pub enum Roles {
-        COMPRADOR,
-        VENDEDOR,
+        Comprador,
+        Vendedor,
     }
 
     #[derive(Encode, Decode, TypeInfo, Debug)]
@@ -32,23 +43,37 @@ mod contrato {
         roles: Vec<Roles>,
     }
 
+    #[derive(Encode, Decode, TypeInfo, Debug)]
+    #[cfg_attr(feature = "std", derive(StorageLayout))]
+
+    pub struct Producto {
+        nombre: String,
+        categoria: Categoria,
+        cantidad: u32,
+        precio: Balance,
+        descripcion: String,
+    }
+
     #[ink(storage)]
     pub struct Contrato {
         value: bool,
         map_usuarios: Mapping<AccountId, Usuario>,
         vec_usuarios: Vec<AccountId>,
+        map_productos: Mapping<u128, Producto>,
+        vec_productos: Vec<u128>,
+        actual_id_prod: u128,
     }
 
     //TODO:
     // Faltarian agregar los siguientes metodos publicos (ink-messages) para exponer la interfaz:
 
-    // - publicar_producto (solo si tiene rol VENDEDOR)
-    // - ver_productos_publicados (solo si tiene rol VENDEDOR)
-    // - enviar_producto (solo si tiene rol VENDEDOR)
+    // - publicar_producto (solo si tiene rol Vendedor)
+    // - ver_productos_publicados (solo si tiene rol Vendedor)
+    // - enviar_producto (solo si tiene rol Vendedor)
 
-    // - comprar_producto (solo si tiene rol COMPRADOR)
-    // - marcar_como_recibido (solo si tiene rol COMPRADOR)
-    // - cancelar_compra (solo si tiene rol COMPRADOR)
+    // - comprar_producto (solo si tiene rol Comprador)
+    // - marcar_como_recibido (solo si tiene rol Comprador)
+    // - cancelar_compra (solo si tiene rol Comprador)
 
     impl Contrato {
         /// Constructor that initializes the `bool` value to the given `init_value`.
@@ -57,7 +82,10 @@ mod contrato {
             Self {
                 value: init_value,
                 map_usuarios: Mapping::default(),
+                map_productos: Mapping::default(),
                 vec_usuarios: Vec::default(),
+                vec_productos: Vec::default(),
+                actual_id_prod: 0,
             }
         }
 
@@ -67,12 +95,53 @@ mod contrato {
         }
 
         #[ink(message)]
+        pub fn agregar_producto(
+            &mut self,
+            nombre: String,
+            categoria: Categoria,
+            cantidad: u32,
+            precio: Balance,
+            descripcion: String,
+        ) -> Result<String, ErroresContrato> {
+            // Comprobar que el producto no exista chequeando nombre y categoria
+            // Agregar producto
+            let nuevo_producto = Producto {
+                nombre,
+                categoria,
+                cantidad,
+                precio,
+                descripcion,
+            };
+            let id_producto = self
+                .actual_id_prod
+                .checked_add(1)
+                .ok_or(ErroresContrato::SeFueALaMierdaElID)?;
+            self.map_productos.insert(id_producto, &nuevo_producto);
+            self.vec_productos.push(id_producto);
+            self.actual_id_prod = id_producto;
+            Ok(nuevo_producto.nombre)
+        }
+
+        #[ink(message)]
+        pub fn listar_productos(&self) -> Vec<Producto> {
+            let mut resultado = Vec::new();
+            for i in 0..self.vec_productos.len() {
+                if let Some(prod_id) = self.vec_productos.get(i) {
+                    if let Some(producto) = self.map_productos.get(prod_id) {
+                        resultado.push(producto);
+                    }
+                }
+            }
+            resultado
+        }
+
+        #[ink(message)]
         pub fn registrar_usuario(
             &mut self,
             nombre: String,
             mail: String,
             roles: Vec<Roles>,
-        ) -> Result<String, MiError> {
+        ) -> Result<String, ErroresContrato> {
             let id_usuario = self.env().caller();
             return self._registrar_usuario(id_usuario, nombre, mail, roles);
         }
@@ -83,14 +152,14 @@ mod contrato {
             nombre: String,
             mail: String,
             roles: Vec<Roles>,
-        ) -> Result<String, MiError> {
+        ) -> Result<String, ErroresContrato> {
             // Verifico que el usuario no exista
             if self.existe_usuario(&account_id) {
-                return Err(MiError::UsuarioYaExistente);
+                return Err(ErroresContrato::UsuarioYaExistente);
             }
             // Verifico que el mail no este en uso
             if self.existe_mail(&mail) {
-                return Err(MiError::MailYaExistente);
+                return Err(ErroresContrato::MailYaExistente);
             }
             let user = Usuario {
                 mail: mail,
@@ -102,10 +171,8 @@ mod contrato {
             self.insertar_usuario(account_id, user)?;
 
             // Genero el mensaje de retorno
-            let base_str = String::from("Se registro el usuario -> ");
             let retorno = {
-                let mut s = String::from("Hola ");
-                s.push_str(&base_str);
+                let mut s = String::from("Se registro el usuario -> ");
                 s.push_str(&nombre);
                 s
             };
@@ -127,7 +194,11 @@ mod contrato {
         }
 
         /// Inserta un usuario si su id no existe aún
-        fn insertar_usuario(&mut self, id: AccountId, usuario: Usuario) -> Result<(), MiError> {
+        fn insertar_usuario(
+            &mut self,
+            id: AccountId,
+            usuario: Usuario,
+        ) -> Result<(), ErroresContrato> {
             self.map_usuarios.insert(id, &usuario);
             self.vec_usuarios.push(id);
             Ok(())
@@ -154,9 +225,9 @@ mod contrato {
 
         // /// Inserta un usuario si su id no existe aún
         // #[ink(message)]
-        // pub fn eliminar_usuario(&mut self, account_id: AccountId) -> Result<(), MiError> {
+        // pub fn eliminar_usuario(&mut self, account_id: AccountId) -> Result<(), ErroresContrato> {
         //     if !self.map_usuarios.contains(account_id) {
-        //         return Err(MiError::UsuarioInexistente);
+        //         return Err(ErroresContrato::UsuarioInexistente);
         //     }
 
         //     // Eliminar del mapa
@@ -273,3 +344,4 @@ mod contrato {
         }
     }
 }
+
