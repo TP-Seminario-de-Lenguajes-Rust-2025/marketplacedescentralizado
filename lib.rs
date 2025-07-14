@@ -77,6 +77,7 @@ mod contrato {
             if self.existe_usuario(&account_id) {
                 return Err(MiError::UsuarioYaExistente);
             }
+            // Verifico que el mail no este en uso
             if self.existe_mail(&mail) {
                 return Err(MiError::MailYaExistente);
             }
@@ -85,12 +86,20 @@ mod contrato {
                 nombre: nombre.clone(),
                 roles: roles,
             };
+
+            // Inserto el usuario tanto en el Mapping como en el Vec
             self.insertar_usuario(account_id, user)?;
-            Ok(format!(
-                "El usuario {} fue registrado correctamente",
-                nombre
-            ))
-            // Verifico que el mail no este en uso
+
+            // Genero el mensaje de retorno
+            let base_str = String::from("Se registro el usuario -> ");
+            let retorno = {
+                let mut s = String::from("Hola ");
+                s.push_str(&base_str);
+                s.push_str(&nombre);
+                s
+            };
+
+            Ok(retorno)
         }
 
         #[ink(message)]
