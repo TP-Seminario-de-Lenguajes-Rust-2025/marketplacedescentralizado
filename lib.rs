@@ -4,11 +4,11 @@
 mod contract {
     use ink::{
         prelude::{string::String, vec::Vec},
-        storage::{Mapping, StorageVec},
+        storage::{Mapping, StorageVec,traits::StorageLayout},
     };
 
-    const COMPRADOR: u32 = 0;
-    const VENDEDOR: u32 = 1;
+    const COMPRADOR:Rol = Rol::Comprador;
+    const VENDEDOR:Rol = Rol::Vendedor;
 
     // #[derive(Clone,Copy)]
     // #[ink::scale_derive(Encode, Decode, TypeInfo)]
@@ -49,12 +49,15 @@ mod contract {
     #[ink::scale_derive(Encode, Decode, TypeInfo)]
     pub enum ErroresApp {
         ErrorComun,
+        ErrorInk(ink_env::Error)
     }
 
+    ///Estructura principal del contrato
     #[ink(storage)]
     pub struct Sistema {
-        users: Vec<Usuario>,
-        roles: Mapping<u32, Rol>,             //roles que existen
+        users: Mapping<AccountId, Usuario>,
+        user_ids: StorageVec<AccountId>,
+        //roles: Mapping<u32, Rol>,             //roles que existen
         categorias: Mapping<u32, Categoria>,  //id_categ
         ordenes_historico: StorageVec<Orden>, //registro de compras
         productos: StorageVec<Producto>,
@@ -62,13 +65,17 @@ mod contract {
     }
 
     impl Sistema {
+        ///Construye el sistema
         #[ink(constructor)]
         pub fn new() -> Self {
-            Sistema {users: Vec::new(), roles: Mapping::new(), categorias: Mapping::new(), ordenes_historico:StorageVec::new(), productos:StorageVec::new(), publicaciones: Vec::new()}
+            Sistema {users: Mapping::new(), user_ids: StorageVec::new(), categorias: Mapping::new(), ordenes_historico:StorageVec::new(), productos:StorageVec::new(), publicaciones: Vec::new()}
         }
 
-        fn get_user(&mut self, id:AccountId) -> Result<Usuario,ErroresApp>{
-            todo!("verifica que existe el usuario")
+        ///Devuelve el usuario segun el AccountId provisto
+        fn get_user(&mut self, id:&AccountId) -> Result<Usuario,ErroresApp>{
+            if let Some(usuario) = self.users.try_get(id){
+                Ok(usuario?)
+            }else{todo!("error: no hay usuario registrado con el AccountId provisto")}
         }
 
         #[ink(message)]
@@ -76,22 +83,21 @@ mod contract {
             &mut self,
             nombre: String,
             mail: String,
-            roles: Vec<Rol>
-        ){
-            todo!()
+        ) -> Result<(), ErroresApp> {
+            let id = self.env().caller();
+            return _registrar_usuario(id, nombre, mail)
         }
-        fn registrar_usuario(
+
+        fn _registrar_usuario(
             &mut self,
             id: AccountId,
             nombre: String,
             mail: String,
-            roles: Vec<u32>,
         ) -> Result<(), ErroresApp> {
-            //verifico que el email no este asosiado a otra cuenta (que no esta repetido)
             if self.users.iter().any(|u| u.mail == mail) {
-                return Err(ErroresApp::ErrorComun);
+                return Err(ErroresApp::ErrorComun); //error: ya existe un usario con el mail provisto
             }
-            let nuevo_usuario = Usuario::new(id, nombre, mail, roles);
+            let nuevo_usuario = Usuario::new(id, nombre, mail, Vec::new());
             self.users.push(nuevo_usuario);
             Ok(())
         }
@@ -138,26 +144,25 @@ mod contract {
         #[ink(message)]
         pub fn crear_producto(
             &mut self,
-            id: u32,
             nombre: String,
             descripcion: String,
             categoria: u32,
             stock: u32
         ) -> Result<(),ErroresApp> {
             let id_vendedor = self.env().caller();
-            return self._crear_producto(id, id_vendedor, nombre, descripcion, categoria, stock)
+            return self._crear_producto(id_vendedor, nombre, descripcion, categoria, stock)
         }
 
         fn _crear_producto(
             &mut self,
-            id: u32,
             id_vendedor: AccountId,
             nombre: String,
             descripcion: String,
             categoria: u32,
             stock: u32
         ) -> Result<(),ErroresApp> {
-            let usuario = self.get_user(id_vendedor)?;
+            let id = self.productos.len().checked_add(1).ok_or(ErroresApp::ErrorComun)?;
+            let usuario = self.get_user(&id_vendedor)?;
             if usuario.has_role(VENDEDOR){
                 if self.categorias.try_get(categoria).is_some() {  
                     let producto = Producto::new(id, id_vendedor, nombre, descripcion, categoria, stock);
@@ -201,9 +206,9 @@ mod contract {
             //precio_total: Decimal//esto deberia estar por parametro???
         ) -> Result<(), ErroresApp>{
             let id_orden = self.ordenes_historico.len().checked_add(1).ok_or(ErroresApp::ErrorComun)?;
-            let comprador = self.get_user(id_comprador)?;
+            let comprador = self.get_user(&id_comprador)?;
             let id_vendedor = self.get_id_vendedor(id_pub)?;
-            let vendedor = self.get_user(id_vendedor)?;
+            let vendedor = self.get_user(&id_vendedor)?;
             //let stock = self.get_stock_publicacion(id_pub)?;
             let precio_producto = self.get_precio_unitario(id_pub)?;
             let precio_total = precio_producto.mult(cantidad);
@@ -249,7 +254,8 @@ mod contract {
     /// Estructuras relacionadas a Usuario
     
     /// Roles existentes
-    #[derive(Encode, Decode, TypeInfo, Debug)]
+    #[ink::scale_derive(Encode, Decode, TypeInfo)]
+    //#[derive(Debug, PartialEq, Eq, Clone)]
     #[cfg_attr(feature = "std", derive(StorageLayout))]
     pub enum Rol {
         Comprador,
@@ -259,6 +265,7 @@ mod contract {
     /// Estructura que define al Usuario
     #[cfg_attr(feature = "std", derive(ink::storage::traits::StorageLayout))]
     #[ink::scale_derive(Encode, Decode, TypeInfo)]
+    //#[derive(Clone)]
     pub struct Usuario {
         id: AccountId,
         nombre: String,
@@ -277,6 +284,20 @@ mod contract {
                 rating: Rating::new(),
                 roles,
             }
+        }
+
+        pub fn registrar_comprador(&mut self) -> Result<(), ErroresApp>{
+            if !self.has_role(COMPRADOR){
+                self.roles.push(COMPRADOR);
+                Ok(())
+            }else{todo!("error: el usuario ya es Comprador")}
+        }
+
+        pub fn registrar_vendedor(&mut self) -> Result<(), ErroresApp>{
+            if !self.has_role(VENDEDOR){
+                self.roles.push(VENDEDOR);
+                Ok(())
+            }else{todo!("error: el usuario ya es Vendedor")}
         }
 
         ///Devuelve true o false si el usuario contiene el rol pasado por parametro
@@ -299,6 +320,7 @@ mod contract {
     /// Estructura correspondiente al raiting de un usuario
     #[cfg_attr(feature = "std", derive(ink::storage::traits::StorageLayout))]
     #[ink::scale_derive(Encode, Decode, TypeInfo)]
+    #[derive(Clone)]
     struct Rating {
         calificacion_comprador: (u32, u32), //cant de compras, valor cumulativo de todas las calificaciones
         calificacion_vendedor: (u32, u32),
