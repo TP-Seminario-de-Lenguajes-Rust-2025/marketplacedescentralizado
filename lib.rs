@@ -57,7 +57,6 @@ mod contrato {
 
     #[ink(storage)]
     pub struct Contrato {
-        value: bool,
         map_usuarios: Mapping<AccountId, Usuario>,
         vec_usuarios: Vec<AccountId>,
         map_productos: Mapping<u128, Producto>,
@@ -79,20 +78,14 @@ mod contrato {
     impl Contrato {
         /// Constructor that initializes the `bool` value to the given `init_value`.
         #[ink(constructor)]
-        pub fn new(init_value: bool) -> Self {
+        pub fn new() -> Self {
             Self {
-                value: init_value,
                 map_usuarios: Mapping::default(),
                 map_productos: Mapping::default(),
                 vec_usuarios: Vec::default(),
                 vec_productos: Vec::default(),
                 actual_id_prod: 0,
             }
-        }
-
-        #[ink(constructor)]
-        pub fn default() -> Self {
-            Self::new(Default::default())
         }
 
         #[ink(message)]
@@ -107,7 +100,7 @@ mod contrato {
             // Comprobar que el usuario esta registrado en la plataforma
             let id_cuenta = self.env().caller();
             if !self.existe_usuario(&id_cuenta) {
-                return Err(ErroresContrato::CuentaNoRegistrada)
+                return Err(ErroresContrato::CuentaNoRegistrada);
             };
             // Comprobar que el producto no exista chequeando nombre y categoria
             // Agregar producto
@@ -164,10 +157,10 @@ mod contrato {
         ) -> Result<String, ErroresContrato> {
             // Verifico que el usuario y el mail no existan
             if self.existe_usuario(&account_id) {
-                return Err(ErroresContrato::UsuarioYaExistente)
+                return Err(ErroresContrato::UsuarioYaExistente);
             };
             if self.existe_mail(&mail) {
-                return Err(ErroresContrato::MailYaExistente)
+                return Err(ErroresContrato::MailYaExistente);
             };
 
             // Instancio nuevo usuario
@@ -204,11 +197,7 @@ mod contrato {
         }
 
         /// Inserta un usuario
-        fn insertar_usuario(
-            &mut self,
-            id: AccountId,
-            usuario: Usuario,
-        ) {
+        fn insertar_usuario(&mut self, id: AccountId, usuario: Usuario) {
             self.map_usuarios.insert(id, &usuario);
             self.vec_usuarios.push(id);
         }
@@ -230,7 +219,7 @@ mod contrato {
         /// Verifica si existe un usuario con el AccountId dado
         fn existe_usuario(&self, id: &AccountId) -> bool {
             if !self.map_usuarios.contains(id) {
-                return false
+                return false;
             }
             true
         }
@@ -263,26 +252,4 @@ mod contrato {
     /// Unit tests in Rust are normally defined within such a `#[cfg(test)]`
     /// module and test functions are marked with a `#[test]` attribute.
     /// The below code is technically just normal Rust code.
-    #[cfg(test)]
-    mod tests {
-        /// Imports all the definitions from the outer scope so we can use them here.
-        use super::*;
-
-        /// We test if the default constructor does its job.
-        #[ink::test]
-        fn default_works() {
-            let contrato = Contrato::default();
-            //assert_eq!(contrato.get(), false);
-        }
-
-        /// We test a simple use case of our contract.
-        #[ink::test]
-        fn it_works() {
-            let mut contrato = Contrato::new(false);
-            //assert_eq!(contrato.get(), false);
-            //contrato.flip();
-            //assert_eq!(contrato.get(), true);
-        }
-    }
 }
-
