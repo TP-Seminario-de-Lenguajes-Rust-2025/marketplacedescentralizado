@@ -76,8 +76,10 @@ mod contract {
             &mut self,
             nombre: String,
             mail: String,
-            roles:
-        )
+            roles: Vec<Rol>
+        ){
+            todo!()
+        }
         fn registrar_usuario(
             &mut self,
             id: AccountId,
