@@ -45,7 +45,6 @@ mod contrato {
 
     #[derive(Encode, Decode, TypeInfo, Debug)]
     #[cfg_attr(feature = "std", derive(StorageLayout))]
-
     pub struct Producto {
         id: u128,
         nombre: String,
@@ -67,8 +66,7 @@ mod contrato {
     //TODO:
     // Faltarian agregar los siguientes metodos publicos (ink-messages) para exponer la interfaz:
 
-    // - publicar_producto (solo si tiene rol Vendedor)
-    // - ver_productos_publicados (solo si tiene rol Vendedor)
+    // - publicar_producto (solo si tiene rol de vendedor)
     // - enviar_producto (solo si tiene rol Vendedor)
 
     // - comprar_producto (solo si tiene rol Comprador)
@@ -136,6 +134,9 @@ mod contrato {
             }
             resultado
         }
+
+        #[ink(message)]
+        pub fn publicar_producto(&self) {}
 
         #[ink(message)]
         pub fn registrar_usuario(
