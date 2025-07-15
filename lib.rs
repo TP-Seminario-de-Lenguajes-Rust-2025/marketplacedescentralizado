@@ -10,41 +10,41 @@ mod contract {
     const COMPRADOR: u32 = 1;
     const VENDEDOR: u32 = 2;
 
-    #[derive(Clone,Copy)]
-    #[ink::scale_derive(Encode, Decode, TypeInfo)]
-    #[cfg_attr(feature = "std", derive(ink::storage::traits::StorageLayout))]
-    pub struct Decimal{
-        entero: u32,
-        decimal: u32
-    }
+    // #[derive(Clone,Copy)]
+    // #[ink::scale_derive(Encode, Decode, TypeInfo)]
+    // #[cfg_attr(feature = "std", derive(ink::storage::traits::StorageLayout))]
+    // pub struct Decimal{
+    //     entero: u32,
+    //     decimal: u32
+    // }
 
-    impl Decimal{
-        fn mult(&self, multiplicador: u32) -> Decimal{
-            let mut entero: u32 = self.entero.checked_mul(multiplicador).expect("hubo overflow xd");
-            let mut decimal: u32 = self.decimal.checked_mul(multiplicador).expect("hubo overflow xd");
-            if decimal.length()> self.decimal.length(){
-                entero = entero.checked_add(decimal.div_euclid(self.decimal.length().checked_mul(10).expect("hubo overflow xd"))).expect("hubo overflow xd");
-                decimal = decimal.checked_rem(self.decimal.length().checked_mul(10).expect("hubo overflow xd")).expect("hubo overflow xd");
-            }
-            Decimal{entero, decimal}
-        }
-    }
+    // impl Decimal{
+    //     fn mult(&self, multiplicador: u32) -> Decimal{
+    //         let mut entero: u32 = self.entero.checked_mul(multiplicador).expect("hubo overflow xd");
+    //         let mut decimal: u32 = self.decimal.checked_mul(multiplicador).expect("hubo overflow xd");
+    //         if decimal.length()> self.decimal.length(){
+    //             entero = entero.checked_add(decimal.div_euclid(self.decimal.length().checked_mul(10).expect("hubo overflow xd"))).expect("hubo overflow xd");
+    //             decimal = decimal.checked_rem(self.decimal.length().checked_mul(10).expect("hubo overflow xd")).expect("hubo overflow xd");
+    //         }
+    //         Decimal{entero, decimal}
+    //     }
+    // }
     
-    trait Lengthable{
-        fn length(&self) -> u32;
-    }
+    // trait Lengthable{
+    //     fn length(&self) -> u32;
+    // }
 
-    impl Lengthable for u32{
-        fn length(&self) -> u32{
-            let mut n = *self;
-            let mut c: u32 = 0;
-            while n!=0_u32{
-                n/=10_u32;
-                c=c.checked_add(1).expect("como carajo hubo overflow aca xd"); //revisar
-            }
-            c
-        }
-    }
+    // impl Lengthable for u32{
+    //     fn length(&self) -> u32{
+    //         let mut n = *self;
+    //         let mut c: u32 = 0;
+    //         while n!=0_u32{
+    //             n/=10_u32;
+    //             c=c.checked_add(1).expect("como carajo hubo overflow aca xd"); //revisar
+    //         }
+    //         c
+    //     }
+    // }
 
     #[ink::scale_derive(Encode, Decode, TypeInfo)]
     pub enum ErroresApp {
@@ -70,7 +70,7 @@ mod contract {
         id_comprador: AccountId,
         status: EstadoOrden,
         cantidad:u32,
-        precio_total: Decimal,       
+        precio_total: Balance,       
         cal_vendedor: Option<u8>,  //calificacion que recibe el vendedor
         cal_comprador: Option<u8>, //calificacion que recibe el comprador
     }
@@ -83,7 +83,7 @@ mod contract {
             id_vendedor: AccountId, 
             id_comprador: AccountId, 
             cantidad:u32,
-            precio_total: Decimal
+            precio_total: Balance
         ) -> Orden {
             Orden {
                 id,
@@ -165,7 +165,7 @@ mod contract {
         id_prod: u32, //id del producto que contiene
         id_user: AccountId, //id del user que publica
         stock: u32,
-        precio_unitario: Decimal,
+        precio_unitario: Balance,
         activa: bool,
     }
 
@@ -181,7 +181,7 @@ mod contract {
         // pub fn actualizar_stock(&mut self, delta: i32) -> Result<(), ErroresApp> {}
 
         //nueva implementacion del new de publicacion sin usar uuid
-        pub fn new(id: u32, id_producto: u32, id_user: AccountId, stock: u32, precio_unitario:Decimal) -> Publicacion {
+        pub fn new(id: u32, id_producto: u32, id_user: AccountId, stock: u32, precio_unitario:Balance) -> Publicacion {
             Publicacion {
                 id,
                 id_prod: id_producto,
@@ -280,8 +280,7 @@ mod contract {
     impl Sistema {
         #[ink(constructor)]
         pub fn new() -> Self {
-            todo!()
-            //Sistema {}
+            Sistema {users: Vec::new(), roles: Mapping::new(), categorias: Mapping::new(), ordenes_historico:StorageVec::new(), productos:StorageVec::new(), publicaciones: Vec::new()}
         }
 
         fn get_user(&mut self, id:AccountId) -> Result<Usuario,ErroresApp>{
@@ -312,7 +311,7 @@ mod contract {
             &mut self,
             id_producto: u32,
             stock: u32,
-            precio: Decimal,
+            precio: Balance,
         ) -> Result<(),ErroresApp>{
             let id_usuario = self.env().caller();
             return self._crear_publicacion(id_producto, id_usuario, stock, precio)
@@ -322,7 +321,7 @@ mod contract {
             id_producto: u32,
             id_usuario: AccountId,
             stock: u32,
-            precio: Decimal,            
+            precio: Balance,            
         ) -> Result<(),ErroresApp> {
             let id = self.publicaciones.len().checked_add(1).ok_or(ErroresApp::ErrorComun)? as u32;
             let usuario = self.get_user(id_usuario)?;
@@ -343,17 +342,6 @@ mod contract {
             self.productos.set(index, &producto);
             Ok(())
         }
-
-        // fn descontar_stock_producto(&mut self, id:u32, cantidad:u32) -> Result<(), ErroresApp>{
-        //     if let Some(index) = id.checked_sub(1){
-        //         if let Some(producto) = self.productos.get(index){
-        //             producto.stock.checked_sub(cantidad);
-        //             self.productos.set(index, producto);
-        //             Ok(())
-        //         }else{todo!("error: indice vacio")}
-        //     }else{todo!("error: id invalida")}
-        // }
-
 
         #[ink(message)]
         pub fn crear_producto(
@@ -398,14 +386,10 @@ mod contract {
                 }
             }
             false
-            //"for i in StorageVec<Producto>{if i.eq(p){return true}}return false"
         }
 
-        //Validar unicidad por nombre o categoría + nombre al registrar un producto nuevo.
 
-
-
-        //se recibe id de publicacion, el comprador es el caller, la cantidad de productos y el monto que el comprador va a pagar en total el cual hay que validar.
+        
         #[ink(message)]
         pub fn realizar_orden(
             &mut self,
@@ -460,7 +444,7 @@ mod contract {
         }
 
         /// Recibe un ID de una publicacion y devuelve su stock
-        fn get_precio_unitario(&self, id_pub:u32) -> Result<Decimal,ErroresApp>{
+        fn get_precio_unitario(&self, id_pub:u32) -> Result<Balance,ErroresApp>{
             if let Some(publicacion) = self.publicaciones.iter().find(|p|p.id == id_pub){
                 Ok(publicacion.precio_unitario)
             }else{
