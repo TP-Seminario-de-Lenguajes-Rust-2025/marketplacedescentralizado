@@ -13,7 +13,7 @@ mod contract {
     #[derive(Clone,Copy)]
     #[ink::scale_derive(Encode, Decode, TypeInfo)]
     #[cfg_attr(feature = "std", derive(ink::storage::traits::StorageLayout))]
-    struct Decimal{
+    pub struct Decimal{
         entero: u32,
         decimal: u32
     }
@@ -339,18 +339,23 @@ mod contract {
         }
 
         fn descontar_stock_producto(&mut self, id:u32, cantidad:u32) -> Result<(), ErroresApp>{
-            if let Some(index) = id.checked_sub(1){
-                if let Some(producto) = self.productos.get(index){// necesito conseguir una referencia mutable de alguna manera
-                    todo!("terminar la logica de la funcion")
-                }else{todo!("error: indice vacio")}
-            }else{todo!("error: id invalida")}
+            let index = id.checked_sub(1).ok_or(ErroresApp::ErrorComun)?;
+            let producto = self.productos.get(index).ok_or(ErroresApp::ErrorComun)?;
+            let producto = producto.stock.checked_sub(cantidad).ok_or(ErroresApp::ErrorComun)?;
+            self.productos.set(index, producto);
+            Ok(())
         }
 
-        // fn get_mut_producto(&mut self, id:u32) -> Result<&mut Producto, ErroresApp>{
+        // fn descontar_stock_producto(&mut self, id:u32, cantidad:u32) -> Result<(), ErroresApp>{
         //     if let Some(index) = id.checked_sub(1){
-        //         Ok(&mut self.productos.get(index).expect("indice vacio"))
-        //     }else{todo!("error: invalid index (<0)")}
+        //         if let Some(producto) = self.productos.get(index){
+        //             producto.stock.checked_sub(cantidad);
+        //             self.productos.set(index, producto);
+        //             Ok(())
+        //         }else{todo!("error: indice vacio")}
+        //     }else{todo!("error: id invalida")}
         // }
+
 
         #[ink(message)]
         pub fn crear_producto(
@@ -387,14 +392,15 @@ mod contract {
         }
 
         fn producto_existe(&self, p:&Producto) -> bool{
-            todo!(
-                "for i in StorageVec<Producto>{
-                    if i.eq(p){
+            for i in 0..self.productos.len(){
+                if let Some(prod) = self.productos.get(i){
+                    if prod.eq(&p){
                         return true
                     }
                 }
-                return false"
-            )
+            }
+            return false
+            //"for i in StorageVec<Producto>{if i.eq(p){return true}}return false"
         }
 
         //Validar unicidad por nombre o categoría + nombre al registrar un producto nuevo.
@@ -448,23 +454,12 @@ mod contract {
         }
 
         fn descontar_stock_publicacion(&mut self, id_pub:u32, cantidad:u32) -> Result<(),ErroresApp>{
-            if let Some(index) = id_pub.checked_sub(1){
-                if let Some(publicacion) = self.publicaciones.get(index as usize){//??? porque devuelve un slice si le estoy pasando una posicion?????
-                    let res = publicacion.stock.checked_sub(cantidad);
-                    if res.is_none(){todo!("error: la publicacion no tiene stock suficiente")
-                    }else{todo!("descuenta el stock ( capaz tendria que ir todo esto en otr if let mas?)")}
-                }else{todo!("error: indice vacio")}
-            }else{todo!("error: indice invalido (<0)")}
+            let index = id_pub.checked_sub(1).ok_or(ErroresApp::ErrorComun)?;
+            if let Some(publicacion) = self.publicaciones.get_mut(index as usize){
+                publicacion.stock.checked_sub(cantidad).ok_or(ErroresApp::ErrorComun)?;
+                Ok(())
+            }
         }
-
-        /// Recibe un ID de una publicacion y devuelve su stock
-        // fn get_stock_publicacion(&self, id_pub:u32) -> Result<u32,ErroresApp>{
-        //     if let Some(publicacion) = self.publicaciones.iter().find(|p|p.id == id_pub){
-        //         Ok(publicacion.stock)
-        //     }else{
-        //         todo!("error: no encontrar la publicacion con el id provisto")
-        //     }
-        // }
 
         /// Recibe un ID de una publicacion y devuelve su stock
         fn get_precio_unitario(&self, id_pub:u32) -> Result<Decimal,ErroresApp>{
@@ -475,6 +470,5 @@ mod contract {
             }
         }
 
-        
     }
 }
