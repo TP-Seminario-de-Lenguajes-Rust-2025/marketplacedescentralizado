@@ -7,8 +7,8 @@ mod contract {
         storage::{Mapping, StorageVec},
     };
 
-    const COMPRADOR: u32 = 1;
-    const VENDEDOR: u32 = 2;
+    const COMPRADOR: u32 = 0;
+    const VENDEDOR: u32 = 1;
 
     // #[derive(Clone,Copy)]
     // #[ink::scale_derive(Encode, Decode, TypeInfo)]
@@ -51,222 +51,6 @@ mod contract {
         ErrorComun,
     }
 
-    #[cfg_attr(feature = "std", derive(ink::storage::traits::StorageLayout))]
-    #[ink::scale_derive(Encode, Decode, TypeInfo)]
-    pub enum EstadoOrden {
-        Pendiente,
-        Enviada,   //solo lo puede modificar el vendedor
-        Recibida,  //solo lo puede modificar el comprador
-        Cancelada, //tienen que estar ambos de acuerdo y tiene que estar en estado pendiente
-    }
-
-    #[cfg_attr(feature = "std", derive(ink::storage::traits::StorageLayout))]
-    #[ink::scale_derive(Encode, Decode, TypeInfo)]
-    pub struct Orden {
-        //info de la orden
-        id: u32,
-        id_publicacion: u32,
-        id_vendedor: AccountId,
-        id_comprador: AccountId,
-        status: EstadoOrden,
-        cantidad:u32,
-        precio_total: Balance,       
-        cal_vendedor: Option<u8>,  //calificacion que recibe el vendedor
-        cal_comprador: Option<u8>, //calificacion que recibe el comprador
-    }
-
-    impl Orden {
-        //nuevo new de orden sin usar uuid pasamos id desde el sistema
-        pub fn new(
-            id: u32, 
-            id_publicacion: u32,
-            id_vendedor: AccountId, 
-            id_comprador: AccountId, 
-            cantidad:u32,
-            precio_total: Balance
-        ) -> Orden {
-            Orden {
-                id,
-                id_publicacion,
-                id_vendedor,
-                id_comprador,
-                status: EstadoOrden::Pendiente,
-                cantidad,
-                precio_total,
-                cal_vendedor: None,
-                cal_comprador: None,
-            }
-        }
-
-        //pub fn cambiar_estado
-        //fn set_enviada() //solamente puede ser modificada por el vendedor
-        //fn set_recibida() //solamente puede ser modificada por el comprador
-        //fn cancelar() //necesitan estar de acuerdo ambos
-    }
-
-    /// LOGICA DE PRODUCTO
-    ///
-
-    #[cfg_attr(feature = "std", derive(ink::storage::traits::StorageLayout))]
-    #[ink::scale_derive(Encode, Decode, TypeInfo)]
-    pub struct Categoria {
-        id: u32,
-        nombre: String,
-    }
-
-    impl Categoria {
-        pub fn crear_categoria() -> Categoria {
-            todo!("debe devolver un Result<Categoria>")
-        }
-    }
-
-    #[cfg_attr(feature = "std", derive(ink::storage::traits::StorageLayout))]
-    #[ink::scale_derive(Encode, Decode, TypeInfo)]
-    pub struct Producto {
-        id: u32,
-        id_vendedor: AccountId,
-        nombre: String,
-        descripcion: String,
-        categoria: u32,
-        stock: u32
-    }
-
-    impl Producto {
-        pub fn new(id: u32, id_vendedor: AccountId, nombre: String, descripcion: String, categoria: u32, stock: u32) -> Producto {
-            //TODO: verificar que stock>0 y precio>0 y nombre y desc sean validos
-            Producto {
-                id,
-                id_vendedor,
-                nombre,
-                descripcion,
-                categoria,
-                stock
-            }
-        }
-
-        pub fn eq(&self, p:&Producto) -> bool{
-            if 
-                self.nombre == p.nombre &&
-                self.categoria == p.categoria
-            {
-                return true 
-            }
-            false
-        }
-        //Validar unicidad por nombre o categoría + nombre al registrar un producto nuevo.
-    }
-
-    ///LOGICA DE PUBLICACION
-
-    #[cfg_attr(feature = "std", derive(ink::storage::traits::StorageLayout))]
-    #[ink::scale_derive(Encode, Decode, TypeInfo)]
-    pub struct Publicacion {
-        id: u32,
-        id_prod: u32, //id del producto que contiene
-        id_user: AccountId, //id del user que publica
-        stock: u32,
-        precio_unitario: Balance,
-        activa: bool,
-    }
-
-    impl Publicacion {
-        pub fn toggle_activa(&mut self) {
-            self.activa = !self.activa;
-        }
-
-        pub fn is_activa(&self) -> bool {
-            self.activa
-        }
-
-        // pub fn actualizar_stock(&mut self, delta: i32) -> Result<(), ErroresApp> {}
-
-        //nueva implementacion del new de publicacion sin usar uuid
-        pub fn new(id: u32, id_producto: u32, id_user: AccountId, stock: u32, precio_unitario:Balance) -> Publicacion {
-            Publicacion {
-                id,
-                id_prod: id_producto,
-                id_user,
-                stock,
-                precio_unitario,
-                activa: true,
-            }
-        }
-    }
-
-    /// LOGICA DE DE USUARIO
-    ///
-
-    #[cfg_attr(feature = "std", derive(ink::storage::traits::StorageLayout))]
-    #[ink::scale_derive(Encode, Decode, TypeInfo)]
-    pub struct Rol {
-        id: u32, //not a Uuid
-        desc: String,
-    }
-
-    impl Rol {
-        pub fn crear_rol() {
-            todo!()
-        }
-    }
-
-    #[cfg_attr(feature = "std", derive(ink::storage::traits::StorageLayout))]
-    #[ink::scale_derive(Encode, Decode, TypeInfo)]
-    struct Rating {
-        calificacion_comprador: (u32, u32), //cant de compras, valor cumulativo de todas las calificaciones
-        calificacion_vendedor: (u32, u32),
-    }
-
-    impl Rating {
-        fn new() -> Rating {
-            Rating {
-                calificacion_comprador: (0, 0),
-                calificacion_vendedor: (0, 0),
-            }
-        }
-        fn get_rating_comprador() -> f64 {
-            todo!("debe devolver Result<f64,ErrDivisionZero>")
-        }
-
-        fn get_rating_vendedor() -> f64 {
-            todo!("debe devolver Result<f64,ErrDivisionZero>")
-        }
-    }
-
-    #[cfg_attr(feature = "std", derive(ink::storage::traits::StorageLayout))]
-    #[ink::scale_derive(Encode, Decode, TypeInfo)]
-    pub struct Usuario {
-        id: AccountId,
-        nombre: String,
-        mail: String,
-        rating: Rating,
-        roles: Vec<u32>, //id de rol
-    }
-
-    impl Usuario {
-        pub fn new(id: AccountId, nombre: String, mail: String, roles: Vec<u32>) -> Usuario {
-            Usuario {
-                id,
-                nombre,
-                mail,
-                rating: Rating::new(),
-                roles,
-            }
-        }
-
-        pub fn has_role(&self, rol: u32) -> bool {
-            self.roles.contains(&rol)
-        }
-
-        pub fn get_rating_comprador() -> f64 {
-            todo!()
-        }
-        pub fn get_rating_vendedor() -> f64 {
-            todo!()
-        }
-
-        pub fn agregar_rol() {}
-    }
-
     #[ink(storage)]
     pub struct Sistema {
         users: Vec<Usuario>,
@@ -289,6 +73,12 @@ mod contract {
 
         #[ink(message)]
         pub fn registrar_usuario(
+            &mut self,
+            nombre: String,
+            mail: String,
+            roles:
+        )
+        fn registrar_usuario(
             &mut self,
             id: AccountId,
             nombre: String,
@@ -453,4 +243,235 @@ mod contract {
         }
 
     }
+
+    /// Estructuras relacionadas a Usuario
+    
+    /// Roles existentes
+    #[derive(Encode, Decode, TypeInfo, Debug)]
+    #[cfg_attr(feature = "std", derive(StorageLayout))]
+    pub enum Rol {
+        Comprador,
+        Vendedor,
+    }
+
+    /// Estructura que define al Usuario
+    #[cfg_attr(feature = "std", derive(ink::storage::traits::StorageLayout))]
+    #[ink::scale_derive(Encode, Decode, TypeInfo)]
+    pub struct Usuario {
+        id: AccountId,
+        nombre: String,
+        mail: String,
+        rating: Rating,
+        roles: Vec<Rol>,
+    }
+
+    impl Usuario {
+        ///Crea un nuevo Usuario
+        pub fn new(id: AccountId, nombre: String, mail: String, roles: Vec<Rol>) -> Usuario {
+            Usuario {
+                id,
+                nombre,
+                mail,
+                rating: Rating::new(),
+                roles,
+            }
+        }
+
+        ///Devuelve true o false si el usuario contiene el rol pasado por parametro
+        pub fn has_role(&self, rol: Rol) -> bool {
+            self.roles.contains(&rol)
+        }
+
+        ///devuelve el Rating como comprador (promedio entre cantidad de ordenes y calificaciones)
+        pub fn get_rating_comprador() -> f64 {
+            todo!()
+        }
+
+        ///devuelve el Rating como vendedor (promedio entre cantidad de ordenes y calificaciones)
+        pub fn get_rating_vendedor() -> f64 {
+            todo!()
+        }
+
+    }
+
+    /// Estructura correspondiente al raiting de un usuario
+    #[cfg_attr(feature = "std", derive(ink::storage::traits::StorageLayout))]
+    #[ink::scale_derive(Encode, Decode, TypeInfo)]
+    struct Rating {
+        calificacion_comprador: (u32, u32), //cant de compras, valor cumulativo de todas las calificaciones
+        calificacion_vendedor: (u32, u32),
+    }
+
+    ///Métodos de usuario
+    impl Rating {
+        ///crea un rating
+        fn new() -> Rating {
+            Rating {
+                calificacion_comprador: (0, 0),
+                calificacion_vendedor: (0, 0),
+            }
+        }
+
+        ///devuelve el Rating como comprador (promedio entre cantidad de ordenes y calificaciones)
+        fn get_rating_comprador() -> f64 {
+            todo!("debe devolver Result<f64,ErrDivisionZero>")
+        }
+
+        ///devuelve el Rating como vendedor (promedio entre cantidad de ordenes y calificaciones)
+        fn get_rating_vendedor() -> f64 {
+            todo!("debe devolver Result<f64,ErrDivisionZero>")
+        }
+    }
+
+
+    /// Estructuras relacionadas a producto
+
+    /// Categorias
+    #[cfg_attr(feature = "std", derive(ink::storage::traits::StorageLayout))]
+    #[ink::scale_derive(Encode, Decode, TypeInfo)]
+    pub struct Categoria {
+        id: u32,
+        nombre: String,
+    }
+
+    impl Categoria {
+        pub fn crear_categoria() -> Categoria {
+            todo!("debe devolver un Result<Categoria>")
+        }
+    }
+
+
+    ///Estructura de un producto
+    #[cfg_attr(feature = "std", derive(ink::storage::traits::StorageLayout))]
+    #[ink::scale_derive(Encode, Decode, TypeInfo)]
+    pub struct Producto {
+        id: u32,
+        id_vendedor: AccountId,
+        nombre: String,
+        descripcion: String,
+        categoria: u32,
+        stock: u32
+    }
+
+    impl Producto {
+        ///Crea un producto nuevo dado los parametros
+        pub fn new(id: u32, id_vendedor: AccountId, nombre: String, descripcion: String, categoria: u32, stock: u32) -> Producto {
+            //TODO: verificar que stock>0 y precio>0 y nombre y desc sean validos
+            Producto {
+                id,
+                id_vendedor,
+                nombre,
+                descripcion,
+                categoria,
+                stock
+            }
+        }
+
+        ///Compara un producto self con un producto pasado por parametro
+        pub fn eq(&self, p:&Producto) -> bool{
+            if 
+                self.nombre == p.nombre &&
+                self.categoria == p.categoria
+            {
+                return true 
+            }
+            false
+        }
+    }
+
+    ///LOGICA DE PUBLICACION
+
+    ///Estructura de publicacion
+    #[cfg_attr(feature = "std", derive(ink::storage::traits::StorageLayout))]
+    #[ink::scale_derive(Encode, Decode, TypeInfo)]
+    pub struct Publicacion {
+        id: u32,
+        id_prod: u32, //id del producto que contiene
+        id_user: AccountId, //id del user que publica
+        stock: u32,
+        precio_unitario: Balance,
+        activa: bool,
+    }
+
+    impl Publicacion {
+        pub fn toggle_activa(&mut self) {
+            self.activa = !self.activa;
+        }
+
+        pub fn is_activa(&self) -> bool {
+            self.activa
+        }
+
+        // pub fn actualizar_stock(&mut self, delta: i32) -> Result<(), ErroresApp> {}
+
+        //nueva implementacion del new de publicacion sin usar uuid
+        pub fn new(id: u32, id_producto: u32, id_user: AccountId, stock: u32, precio_unitario:Balance) -> Publicacion {
+            Publicacion {
+                id,
+                id_prod: id_producto,
+                id_user,
+                stock,
+                precio_unitario,
+                activa: true,
+            }
+        }
+    }
+
+    ///Estructuras y logica de Orden
+    ///Posibles estados de una Ordem
+    #[cfg_attr(feature = "std", derive(ink::storage::traits::StorageLayout))]
+    #[ink::scale_derive(Encode, Decode, TypeInfo)]
+    pub enum EstadoOrden {
+        Pendiente,
+        Enviada,   //solo lo puede modificar el vendedor
+        Recibida,  //solo lo puede modificar el comprador
+        Cancelada, //tienen que estar ambos de acuerdo y tiene que estar en estado pendiente
+    }
+
+
+    ///Estructura de orden
+    #[cfg_attr(feature = "std", derive(ink::storage::traits::StorageLayout))]
+    #[ink::scale_derive(Encode, Decode, TypeInfo)]
+    pub struct Orden {
+        //info de la orden
+        id: u32,
+        id_publicacion: u32,
+        id_vendedor: AccountId,
+        id_comprador: AccountId,
+        status: EstadoOrden,
+        cantidad:u32,
+        precio_total: Balance,       
+        cal_vendedor: Option<u8>,  //calificacion que recibe el vendedor
+        cal_comprador: Option<u8>, //calificacion que recibe el comprador
+    }
+
+    impl Orden {
+        ///crea una nueva orden
+        pub fn new(
+            id: u32, 
+            id_publicacion: u32,
+            id_vendedor: AccountId, 
+            id_comprador: AccountId, 
+            cantidad:u32,
+            precio_total: Balance
+        ) -> Orden {
+            Orden {
+                id,
+                id_publicacion,
+                id_vendedor,
+                id_comprador,
+                status: EstadoOrden::Pendiente,
+                cantidad,
+                precio_total,
+                cal_vendedor: None,
+                cal_comprador: None,
+            }
+        }
+
+        //pub fn cambiar_estado
+        //fn set_enviada() //solamente puede ser modificada por el vendedor
+        //fn set_recibida() //solamente puede ser modificada por el comprador
+        //fn cancelar() //necesitan estar de acuerdo ambos
+    }
+
 }
