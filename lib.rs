@@ -324,7 +324,7 @@ mod contract {
             stock: u32,
             precio: Decimal,            
         ) -> Result<(),ErroresApp> {
-            let id = self.publicaciones.len().checked_add(1).expect("se lleno el vector de publicaciones xd") as u32;
+            let id = self.publicaciones.len().checked_add(1).ok_or(ErroresApp::ErrorComun)? as u32;
             let usuario = self.get_user(id_usuario)?;
             if usuario.has_role(VENDEDOR){
                 if let Some(index) = id_producto.checked_sub(1){
@@ -426,7 +426,7 @@ mod contract {
             cantidad:u32,
             //precio_total: Decimal//esto deberia estar por parametro???
         ) -> Result<(), ErroresApp>{
-            let id_orden = self.ordenes_historico.len().checked_add(1).expect("se lleno el vector de ordenes xd");
+            let id_orden = self.ordenes_historico.len().checked_add(1).ok_or(ErroresApp::ErrorComun)?;
             let comprador = self.get_user(id_comprador)?;
             let id_vendedor = self.get_id_vendedor(id_pub)?;
             let vendedor = self.get_user(id_vendedor)?;
