@@ -151,7 +151,7 @@ mod contract {
             {
                 return true 
             }
-            return false
+            false
         }
         //Validar unicidad por nombre o categoría + nombre al registrar un producto nuevo.
     }
@@ -328,12 +328,10 @@ mod contract {
             let usuario = self.get_user(id_usuario)?;
             if usuario.has_role(VENDEDOR){
                 if let Some(index) = id_producto.checked_sub(1){
-                    if let Some(producto) = self.productos.get(index){
-                        self.descontar_stock_producto(id_producto, stock)?;
-                        let p = Publicacion::new(id, id_producto, id_usuario, stock, precio);
-                        self.publicaciones.push(p);
-                        Ok(())
-                    }else{todo!("error: no habia producto en el indice provisto")}
+                    self.descontar_stock_producto(id_producto, stock)?;
+                    let p = Publicacion::new(id, id_producto, id_usuario, stock, precio);
+                    self.publicaciones.push(p);
+                    Ok(())
                 }else{todo!("error: indice invalido (<0)")}
             } else {todo!("error: usuario no tiene el rol apropiado")}
         }
@@ -341,8 +339,8 @@ mod contract {
         fn descontar_stock_producto(&mut self, id:u32, cantidad:u32) -> Result<(), ErroresApp>{
             let index = id.checked_sub(1).ok_or(ErroresApp::ErrorComun)?;
             let producto = self.productos.get(index).ok_or(ErroresApp::ErrorComun)?;
-            let producto = producto.stock.checked_sub(cantidad).ok_or(ErroresApp::ErrorComun)?;
-            self.productos.set(index, producto);
+            producto.stock.checked_sub(cantidad).ok_or(ErroresApp::ErrorComun)?;
+            self.productos.set(index, &producto);
             Ok(())
         }
 
@@ -394,12 +392,12 @@ mod contract {
         fn producto_existe(&self, p:&Producto) -> bool{
             for i in 0..self.productos.len(){
                 if let Some(prod) = self.productos.get(i){
-                    if prod.eq(&p){
+                    if prod.eq(p){
                         return true
                     }
                 }
             }
-            return false
+            false
             //"for i in StorageVec<Producto>{if i.eq(p){return true}}return false"
         }
 
@@ -458,7 +456,7 @@ mod contract {
             if let Some(publicacion) = self.publicaciones.get_mut(index as usize){
                 publicacion.stock.checked_sub(cantidad).ok_or(ErroresApp::ErrorComun)?;
                 Ok(())
-            }
+            }else{todo!("error: no habia publicacion en el indice")}
         }
 
         /// Recibe un ID de una publicacion y devuelve su stock
