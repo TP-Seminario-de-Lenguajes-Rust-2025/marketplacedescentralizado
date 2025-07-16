@@ -11,7 +11,7 @@
 mod contrato {
     use ink::prelude::string::String;
     use ink::storage::traits::StorageLayout;
-    use ink::storage::Mapping;
+    use ink::storage::{Mapping, StorageVec};
     use scale::{Decode, Encode};
     use scale_info::prelude::vec::Vec;
     use scale_info::TypeInfo;
@@ -35,12 +35,10 @@ mod contrato {
 
     #[derive(Encode, Decode, TypeInfo, Debug, PartialEq)]
     #[cfg_attr(feature = "std", derive(StorageLayout))]
-    pub enum Categoria {
-        Bazar,
-        Hogar,
-        Electronica,
-        FalopaDeLaRica,
-        Otros,
+    pub struct Categoria {
+        id: u128,
+        nombre: String,
+        descripcion: String,
     }
 
     #[derive(Encode, Decode, TypeInfo, Debug, PartialEq)]
@@ -64,8 +62,8 @@ mod contrato {
     #[cfg_attr(feature = "std", derive(TypeInfo))]
 
     pub struct Orden {
-        id: u128,
-        id_publicacion: u128,
+        id: u32,
+        id_publicacion: u32,
         id_vendedor: AccountId,
         id_comprador: AccountId,
         status: EstadoOrden,
@@ -86,7 +84,7 @@ mod contrato {
     #[derive(Encode, Decode, TypeInfo, Debug)]
     #[cfg_attr(feature = "std", derive(StorageLayout))]
     pub struct Producto {
-        id: u128,
+        id: u32,
         nombre: String,
         categoria: Categoria,
         cantidad: u32,
@@ -98,23 +96,21 @@ mod contrato {
     #[cfg_attr(feature = "std", derive(TypeInfo))]
     #[cfg_attr(feature = "std", derive(StorageLayout))]
     pub struct Publicacion {
-        id: u128,
-        id_producto: u128,
+        id: u32,
+        id_producto: u32,
         id_publicador: AccountId,
-        cantidad: u128,
+        cantidad: u32,
         activa: bool,
     }
 
     #[ink(storage)]
     pub struct Contrato {
-        v_productos: Vec<u128>,
-        m_productos: Mapping<u128, Producto>,
-        v_ordenes: Vec<u128>,
-        m_ordenes: Mapping<u128, Orden>,
         v_usuarios: Vec<AccountId>,
         m_usuarios: Mapping<AccountId, Usuario>,
-        v_publicaciones: Vec<u128>,
-        m_publicaciones: Mapping<u128, Publicacion>,
+        productos: StorageVec<Producto>,
+        ordenes: StorageVec<Orden>,
+        publicaciones: StorageVec<Publicacion>,
+        categorias: StorageVec<Categoria>,
     }
 
     pub trait GestionProducto {
@@ -133,9 +129,9 @@ mod contrato {
             &self,
             nombre: &String,
             categoria: &Categoria,
-        ) -> Result<u128, ErroresContrato>;
+        ) -> Result<u32, ErroresContrato>;
 
-        fn get_producto_by_id(&self, id_producto: u128) -> Result<Producto, ErroresContrato>;
+        fn get_producto_by_id(&self, id_producto: u32) -> Result<Producto, ErroresContrato>;
     }
 
     pub trait GestionUsuario {
@@ -157,26 +153,26 @@ mod contrato {
     pub trait GestionOrden {
         fn _registrar_orden(
             &mut self,
-            id_publicacion: u128,
+            id_publicacion: u32,
             id_comprador: AccountId,
             cantidad: u32,
         ) -> Result<String, ErroresContrato>;
 
         fn _listar_ordenes(&self) -> Vec<Orden>;
 
-        fn _enviar_orden(&mut self, id_orden: u128) -> Result<(), ErroresContrato>;
+        fn _enviar_orden(&mut self, id_orden: u32) -> Result<(), ErroresContrato>;
 
-        fn _recibir_orden(&mut self, id_orden: u128) -> Result<(), ErroresContrato>;
+        fn _recibir_orden(&mut self, id_orden: u32) -> Result<(), ErroresContrato>;
 
-        fn _cancelar_orden(&mut self, id_orden: u128) -> Result<(), ErroresContrato>;
+        fn _cancelar_orden(&mut self, id_orden: u32) -> Result<(), ErroresContrato>;
     }
 
     pub trait GestionPublicacion {
         fn _registrar_publicacion(
             &mut self,
-            id_producto: u128,
+            id_producto: u32,
             id_publicador: AccountId,
-            cantidad: u128,
+            cantidad: u32,
         ) -> Result<String, ErroresContrato>;
 
         fn _listar_publicaciones(&self) -> Vec<Publicacion>;
@@ -184,7 +180,7 @@ mod contrato {
 
     impl Producto {
         pub fn new(
-            id: u128,
+            id: u32,
             nombre: String,
             categoria: Categoria,
             cantidad: u32,
@@ -204,8 +200,8 @@ mod contrato {
 
     impl Orden {
         pub fn new(
-            id: u128,
-            id_publicacion: u128,
+            id: u32,
+            id_publicacion: u32,
             id_vendedor: AccountId,
             id_comprador: AccountId,
             cantidad: u32,
@@ -226,7 +222,7 @@ mod contrato {
     }
 
     impl Publicacion {
-        pub fn new(id: u128, id_producto: u128, id_publicador: AccountId, cantidad: u128) -> Self {
+        pub fn new(id: u32, id_producto: u32, id_publicador: AccountId, cantidad: u32) -> Self {
             Self {
                 id,
                 id_producto,
@@ -252,26 +248,23 @@ mod contrato {
             }
             // Agregar producto
             let id = self
-                .v_productos
+                .productos
                 .len()
                 .checked_add(1)
-                .ok_or(ErroresContrato::MaximoAlcanzado)? as u128;
+                .ok_or(ErroresContrato::MaximoAlcanzado)? as u32;
 
             let nuevo_producto =
                 Producto::new(id, nombre, categoria, cantidad, precio, descripcion);
 
-            self.m_productos.insert(id, &nuevo_producto);
-            self.v_productos.push(id);
+            self.productos.push(&nuevo_producto);
             Ok(String::from("El producto fue registrado correctamente"))
         }
 
         fn _listar_productos(&self) -> Vec<Producto> {
             let mut resultado = Vec::new();
-            for i in 0..self.v_productos.len() {
-                if let Some(prod_id) = self.v_productos.get(i) {
-                    if let Some(producto) = self.m_productos.get(prod_id) {
-                        resultado.push(producto);
-                    }
+            for i in 0..self.productos.len() {
+                if let Some(producto) = self.productos.get(i) {
+                    resultado.push(producto);
                 }
             }
             resultado
@@ -281,28 +274,24 @@ mod contrato {
             &self,
             nombre: &String,
             categoria: &Categoria,
-        ) -> Result<u128, ErroresContrato> {
-            for i in 0..self.v_productos.len() {
+        ) -> Result<u32, ErroresContrato> {
+            for i in 0..self.productos.len() {
                 //
-                let prod_id = self
-                    .v_productos
+                let producto = self
+                    .productos
                     .get(i)
                     .ok_or(ErroresContrato::ProductoInexistente)?;
-                let producto = self
-                    .m_productos
-                    .get(prod_id)
-                    .ok_or(ErroresContrato::ProductoInexistente)?;
                 if producto.nombre == *nombre && producto.categoria == *categoria {
-                    return Ok(*prod_id);
+                    return Ok(producto.id);
                 }
             }
             Err(ErroresContrato::ProductoInexistente)
         }
 
-        fn get_producto_by_id(&self, id_producto: u128) -> Result<Producto, ErroresContrato> {
+        fn get_producto_by_id(&self, id_producto: u32) -> Result<Producto, ErroresContrato> {
             let producto = self
-                .m_productos
-                .get(&id_producto)
+                .productos
+                .get(id_producto)
                 .ok_or(ErroresContrato::ProductoInexistente)?;
             Ok(producto)
         }
@@ -375,25 +364,25 @@ mod contrato {
     impl GestionOrden for Contrato {
         fn _registrar_orden(
             &mut self,
-            id_publicacion: u128,
+            id_publicacion: u32,
             id_comprador: AccountId,
             cantidad: u32,
         ) -> Result<String, ErroresContrato> {
             //TODO: Chequear si se dispone de suficiente stock en la publi para la cantidad solicitada
 
             let id = self
-                .v_ordenes
+                .ordenes
                 .len()
                 .checked_add(1)
-                .ok_or(ErroresContrato::MaximoAlcanzado)? as u128;
+                .ok_or(ErroresContrato::MaximoAlcanzado)?;
 
             let publicacion = self
-                .m_publicaciones
+                .publicaciones
                 .get(id_publicacion)
                 .ok_or(ErroresContrato::PublicacionNoExiste)?;
 
             let producto = self
-                .m_productos
+                .productos
                 .get(publicacion.id_producto)
                 .ok_or(ErroresContrato::PublicacionNoExiste)?;
 
@@ -411,8 +400,7 @@ mod contrato {
                 precio_total,
             );
 
-            self.m_ordenes.insert(id, &orden);
-            self.v_ordenes.push(id);
+            self.ordenes.push(&orden);
 
             //TODO: Descontar el stock de la cantidad de la publicacion.
             //      Si la cantidad llega a 0, la publicacion deberia desactivarse.
@@ -422,51 +410,49 @@ mod contrato {
 
         fn _listar_ordenes(&self) -> Vec<Orden> {
             let mut resultado = Vec::new();
-            for i in 0..self.v_ordenes.len() {
-                if let Some(id_orden) = self.v_ordenes.get(i) {
-                    if let Some(orden) = self.m_ordenes.get(id_orden) {
-                        resultado.push(orden);
-                    }
+            for i in 0..self.ordenes.len() {
+                if let Some(orden) = self.ordenes.get(i) {
+                    resultado.push(orden);
                 }
             }
             resultado
         }
 
-        fn _enviar_orden(&mut self, id_orden: u128) -> Result<(), ErroresContrato> {
+        fn _enviar_orden(&mut self, id_orden: u32) -> Result<(), ErroresContrato> {
             let mut orden = self
-                .m_ordenes
+                .ordenes
                 .get(id_orden)
                 .ok_or(ErroresContrato::OrdenInexistente)?;
 
             match orden.status {
                 EstadoOrden::Pendiente => {
                     orden.status = EstadoOrden::Enviada;
-                    self.m_ordenes.insert(id_orden, &orden);
+                    self.ordenes.set(id_orden, &orden);
                     Ok(())
                 }
                 _ => Err(ErroresContrato::OrdenNoPendiente),
             }
         }
 
-        fn _recibir_orden(&mut self, id_orden: u128) -> Result<(), ErroresContrato> {
+        fn _recibir_orden(&mut self, id_orden: u32) -> Result<(), ErroresContrato> {
             let mut orden = self
-                .m_ordenes
+                .ordenes
                 .get(id_orden)
                 .ok_or(ErroresContrato::OrdenInexistente)?;
 
             match orden.status {
                 EstadoOrden::Enviada => {
                     orden.status = EstadoOrden::Recibida;
-                    self.m_ordenes.insert(id_orden, &orden);
+                    self.ordenes.set(id_orden, &orden);
                     Ok(())
                 }
                 _ => Err(ErroresContrato::OrdenNoEnviada),
             }
         }
 
-        fn _cancelar_orden(&mut self, id_orden: u128) -> Result<(), ErroresContrato> {
+        fn _cancelar_orden(&mut self, id_orden: u32) -> Result<(), ErroresContrato> {
             let mut orden = self
-                .m_ordenes
+                .ordenes
                 .get(id_orden)
                 .ok_or(ErroresContrato::OrdenInexistente)?;
 
@@ -474,7 +460,7 @@ mod contrato {
                 EstadoOrden::Enviada => Err(ErroresContrato::OrdenNoEnviada),
                 _ => {
                     orden.status = EstadoOrden::Recibida;
-                    self.m_ordenes.insert(id_orden, &orden);
+                    self.ordenes.set(id_orden, &orden);
                     Ok(())
                 }
             }
@@ -484,22 +470,21 @@ mod contrato {
     impl GestionPublicacion for Contrato {
         fn _registrar_publicacion(
             &mut self,
-            id_producto: u128,
+            id_producto: u32,
             id_publicador: AccountId,
-            cantidad: u128,
+            cantidad: u32,
         ) -> Result<String, ErroresContrato> {
             //TODO: chequear si se dispone del stock del Producto antes de generar la publicacion
 
             let id = self
-                .v_ordenes
+                .publicaciones
                 .len()
                 .checked_add(1)
-                .ok_or(ErroresContrato::MaximoAlcanzado)? as u128;
+                .ok_or(ErroresContrato::MaximoAlcanzado)?;
 
             let publicacion = Publicacion::new(id, id_producto, id_publicador, cantidad);
 
-            self.m_publicaciones.insert(id, &publicacion);
-            self.v_publicaciones.push(id);
+            self.publicaciones.push(&publicacion);
 
             //TODO: Descontar el stock de la cantidad del Producto.
 
@@ -508,11 +493,9 @@ mod contrato {
 
         fn _listar_publicaciones(&self) -> Vec<Publicacion> {
             let mut resultado = Vec::new();
-            for i in 0..self.v_publicaciones.len() {
-                if let Some(publi_id) = self.v_publicaciones.get(i) {
-                    if let Some(publi) = self.m_publicaciones.get(publi_id) {
-                        resultado.push(publi);
-                    }
+            for i in 0..self.publicaciones.len() {
+                if let Some(publi) = self.publicaciones.get(i) {
+                    resultado.push(publi);
                 }
             }
             resultado
@@ -532,14 +515,12 @@ mod contrato {
         #[ink(constructor)]
         pub fn new() -> Self {
             Self {
-                m_productos: Mapping::default(),
                 m_usuarios: Mapping::default(),
-                m_ordenes: Mapping::default(),
-                m_publicaciones: Mapping::default(),
-                v_publicaciones: Vec::new(),
-                v_ordenes: Vec::new(),
-                v_productos: Vec::new(),
                 v_usuarios: Vec::new(),
+                productos: StorageVec::default(),
+                ordenes: StorageVec::default(),
+                publicaciones: StorageVec::default(),
+                categorias: StorageVec::default(),
             }
         }
 
@@ -609,8 +590,8 @@ mod contrato {
         #[ink(message)]
         pub fn publicar_producto(
             &mut self,
-            id_producto: u128,
-            cantidad: u128,
+            id_producto: u32,
+            cantidad: u32,
         ) -> Result<String, ErroresContrato> {
             // Compruebo que el usuario existe y posee rol de vendedor
             self._usuario_con_rol(Rol::Vendedor)?;
@@ -639,7 +620,7 @@ mod contrato {
         #[ink(message)]
         pub fn comprar_producto(
             &mut self,
-            id_publicacion: u128,
+            id_publicacion: u32,
             cantidad: u32,
         ) -> Result<String, ErroresContrato> {
             // Compruebo que el usuario existe y posee rol de comprador
@@ -671,7 +652,7 @@ mod contrato {
         /// - `CuentaNoRegistrada` si el caller no está registrado.
         /// - `UsuarioSinRoles` si no tiene el rol correspondiente.
         #[ink(message)]
-        pub fn enviar_producto(&mut self, id_orden: u128) -> Result<String, ErroresContrato> {
+        pub fn enviar_producto(&mut self, id_orden: u32) -> Result<String, ErroresContrato> {
             // Compruebo que el usuario existe y posee rol de vendedor
             self._usuario_con_rol(Rol::Vendedor)?;
             self._enviar_orden(id_orden)?;
@@ -692,7 +673,7 @@ mod contrato {
         /// - `CuentaNoRegistrada` si el caller no está registrado.
         /// - `UsuarioSinRoles` si no tiene el rol correspondiente.
         #[ink(message)]
-        pub fn recibir_producto(&mut self, id_orden: u128) -> Result<String, ErroresContrato> {
+        pub fn recibir_producto(&mut self, id_orden: u32) -> Result<String, ErroresContrato> {
             // Compruebo que el usuario existe y posee rol de vendedor
             self._usuario_con_rol(Rol::Comprador)?;
             self._recibir_orden(id_orden)?;
@@ -713,7 +694,7 @@ mod contrato {
         /// - `CuentaNoRegistrada` si el caller no está registrado.
         /// - `UsuarioSinRoles` si no tiene el rol correspondiente.
         #[ink(message)]
-        pub fn cancelar_producto(&mut self, id_orden: u128) -> Result<String, ErroresContrato> {
+        pub fn cancelar_producto(&mut self, id_orden: u32) -> Result<String, ErroresContrato> {
             // Compruebo que el usuario existe y posee rol de vendedor
             self._usuario_con_rol(Rol::Comprador)?; //TODO: me parece que habia una logica adicional en el cancelar... CHEQUEAR
             self._cancelar_orden(id_orden)?;
@@ -728,7 +709,7 @@ mod contrato {
 
         /// Devuelve una lista de todas las publicaciones en el contrato.
         #[ink(message)]
-        pub fn _listar_publicaciones(&self) -> Vec<Publicacion> {
+        pub fn listar_publicaciones(&self) -> Vec<Publicacion> {
             self._listar_publicaciones()
         }
 
