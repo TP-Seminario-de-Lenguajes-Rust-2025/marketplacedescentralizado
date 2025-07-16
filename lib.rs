@@ -1,5 +1,12 @@
 #![cfg_attr(not(feature = "std"), no_std, no_main)]
 
+//TODO:
+// - Agregar la logica de las validaciones de cantidades.
+//   Se debe controlar que las cantidades solicitadas no superen
+//   los stocks en PUBLICACION y en PRODUCTO.
+// - Agregar servicio ver_productos_publicados
+//
+
 #[ink::contract]
 mod contrato {
     use ink::prelude::string::String;
@@ -11,14 +18,22 @@ mod contrato {
 
     #[derive(Encode, Decode, TypeInfo, Debug)]
     pub enum ErroresContrato {
-        NoAutorizado,
+        UsuarioSinRoles,
         UsuarioYaExistente,
         CuentaNoRegistrada,
         MailYaExistente,
-        SeFueALaMierdaElID,
+        MailInexistente,
+        ProductoInexistente,
+        ProductoYaExistente,
+        MaximoAlcanzado,
+        OrdenNoPendiente,
+        OrdenNoEnviada,
+        OrdenYaCancelada,
+        OrdenInexistente,
+        PublicacionNoExiste,
     }
 
-    #[derive(Encode, Decode, TypeInfo, Debug)]
+    #[derive(Encode, Decode, TypeInfo, Debug, PartialEq)]
     #[cfg_attr(feature = "std", derive(StorageLayout))]
     pub enum Categoria {
         Bazar,
@@ -28,11 +43,36 @@ mod contrato {
         Otros,
     }
 
-    #[derive(Encode, Decode, TypeInfo, Debug)]
+    #[derive(Encode, Decode, TypeInfo, Debug, PartialEq)]
     #[cfg_attr(feature = "std", derive(StorageLayout))]
-    pub enum Roles {
+    pub enum Rol {
         Comprador,
         Vendedor,
+    }
+
+    #[derive(Encode, Decode, TypeInfo, Debug, PartialEq)]
+    #[cfg_attr(feature = "std", derive(StorageLayout))]
+    pub enum EstadoOrden {
+        Pendiente,
+        Enviada,
+        Recibida,
+        Cancelada,
+    }
+
+    #[derive(Encode, Decode, Debug, PartialEq)]
+    #[cfg_attr(feature = "std", derive(StorageLayout))]
+    #[cfg_attr(feature = "std", derive(TypeInfo))]
+
+    pub struct Orden {
+        id: u128,
+        id_publicacion: u128,
+        id_vendedor: AccountId,
+        id_comprador: AccountId,
+        status: EstadoOrden,
+        cantidad: u32,
+        precio_total: Balance,
+        cal_vendedor: Option<u8>,
+        cal_comprador: Option<u8>,
     }
 
     #[derive(Encode, Decode, TypeInfo, Debug)]
@@ -40,7 +80,7 @@ mod contrato {
     pub struct Usuario {
         nombre: String,
         mail: String,
-        roles: Vec<Roles>,
+        roles: Vec<Rol>,
     }
 
     #[derive(Encode, Decode, TypeInfo, Debug)]
@@ -54,40 +94,493 @@ mod contrato {
         descripcion: String,
     }
 
-    #[ink(storage)]
-    pub struct Contrato {
-        map_usuarios: Mapping<AccountId, Usuario>,
-        vec_usuarios: Vec<AccountId>,
-        map_productos: Mapping<u128, Producto>,
-        vec_productos: Vec<u128>,
-        actual_id_prod: u128,
+    #[derive(Encode, Decode, Debug)]
+    #[cfg_attr(feature = "std", derive(TypeInfo))]
+    #[cfg_attr(feature = "std", derive(StorageLayout))]
+    pub struct Publicacion {
+        id: u128,
+        id_producto: u128,
+        id_publicador: AccountId,
+        cantidad: u128,
+        activa: bool,
     }
 
-    //TODO:
-    // Faltarian agregar los siguientes metodos publicos (ink-messages) para exponer la interfaz:
+    #[ink(storage)]
+    pub struct Contrato {
+        v_productos: Vec<u128>,
+        m_productos: Mapping<u128, Producto>,
+        v_ordenes: Vec<u128>,
+        m_ordenes: Mapping<u128, Orden>,
+        v_usuarios: Vec<AccountId>,
+        m_usuarios: Mapping<AccountId, Usuario>,
+        v_publicaciones: Vec<u128>,
+        m_publicaciones: Mapping<u128, Publicacion>,
+    }
 
-    // - publicar_producto (solo si tiene rol de vendedor)
-    // - enviar_producto (solo si tiene rol Vendedor)
+    pub trait GestionProducto {
+        fn _agregar_producto(
+            &mut self,
+            nombre: String,
+            categoria: Categoria,
+            cantidad: u32,
+            precio: Balance,
+            descripcion: String,
+        ) -> Result<String, ErroresContrato>;
 
-    // - comprar_producto (solo si tiene rol Comprador)
-    // - marcar_como_recibido (solo si tiene rol Comprador)
-    // - cancelar_compra (solo si tiene rol Comprador)
+        fn _listar_productos(&self) -> Vec<Producto>;
 
-    impl Contrato {
-        /// Constructor that initializes the `bool` value to the given `init_value`.
-        #[ink(constructor)]
-        pub fn new() -> Self {
+        fn get_producto_by_name(
+            &self,
+            nombre: &String,
+            categoria: &Categoria,
+        ) -> Result<u128, ErroresContrato>;
+
+        fn get_producto_by_id(&self, id_producto: u128) -> Result<Producto, ErroresContrato>;
+    }
+
+    pub trait GestionUsuario {
+        fn _registrar_usuario(
+            &mut self,
+            account_id: AccountId,
+            nombre: String,
+            mail: String,
+            roles: Vec<Rol>,
+        ) -> Result<String, ErroresContrato>;
+
+        fn _listar_usuarios(&self) -> Vec<Usuario>;
+
+        fn get_usuario_by_mail(&self, mail: &str) -> Result<Usuario, ErroresContrato>;
+
+        fn get_usuario_by_id(&self, id: &AccountId) -> Result<Usuario, ErroresContrato>;
+    }
+
+    pub trait GestionOrden {
+        fn _registrar_orden(
+            &mut self,
+            id_publicacion: u128,
+            id_comprador: AccountId,
+            cantidad: u32,
+        ) -> Result<String, ErroresContrato>;
+
+        fn _listar_ordenes(&self) -> Vec<Orden>;
+
+        fn _enviar_orden(&mut self, id_orden: u128) -> Result<(), ErroresContrato>;
+
+        fn _recibir_orden(&mut self, id_orden: u128) -> Result<(), ErroresContrato>;
+
+        fn _cancelar_orden(&mut self, id_orden: u128) -> Result<(), ErroresContrato>;
+    }
+
+    pub trait GestionPublicacion {
+        fn _registrar_publicacion(
+            &mut self,
+            id_producto: u128,
+            id_publicador: AccountId,
+            cantidad: u128,
+        ) -> Result<String, ErroresContrato>;
+
+        fn _listar_publicaciones(&self) -> Vec<Publicacion>;
+    }
+
+    impl Producto {
+        pub fn new(
+            id: u128,
+            nombre: String,
+            categoria: Categoria,
+            cantidad: u32,
+            precio: Balance,
+            descripcion: String,
+        ) -> Self {
             Self {
-                map_usuarios: Mapping::default(),
-                map_productos: Mapping::default(),
-                vec_usuarios: Vec::default(),
-                vec_productos: Vec::default(),
-                actual_id_prod: 0,
+                id,
+                nombre,
+                categoria,
+                cantidad,
+                precio,
+                descripcion,
+            }
+        }
+    }
+
+    impl Orden {
+        pub fn new(
+            id: u128,
+            id_publicacion: u128,
+            id_vendedor: AccountId,
+            id_comprador: AccountId,
+            cantidad: u32,
+            precio_total: Balance,
+        ) -> Orden {
+            Orden {
+                id,
+                id_publicacion,
+                id_vendedor,
+                id_comprador,
+                status: EstadoOrden::Pendiente,
+                cantidad,
+                precio_total,
+                cal_vendedor: None,
+                cal_comprador: None,
+            }
+        }
+    }
+
+    impl Publicacion {
+        pub fn new(id: u128, id_producto: u128, id_publicador: AccountId, cantidad: u128) -> Self {
+            Self {
+                id,
+                id_producto,
+                id_publicador,
+                cantidad,
+                activa: true,
+            }
+        }
+    }
+
+    impl GestionProducto for Contrato {
+        fn _agregar_producto(
+            &mut self,
+            nombre: String,
+            categoria: Categoria,
+            cantidad: u32,
+            precio: Balance,
+            descripcion: String,
+        ) -> Result<String, ErroresContrato> {
+            // Chequeo si el producto no existe
+            if self.get_producto_by_name(&nombre, &categoria).is_ok() {
+                return Err(ErroresContrato::ProductoYaExistente);
+            }
+            // Agregar producto
+            let id = self
+                .v_productos
+                .len()
+                .checked_add(1)
+                .ok_or(ErroresContrato::MaximoAlcanzado)? as u128;
+
+            let nuevo_producto =
+                Producto::new(id, nombre, categoria, cantidad, precio, descripcion);
+
+            self.m_productos.insert(id, &nuevo_producto);
+            self.v_productos.push(id);
+            Ok(String::from("El producto fue registrado correctamente"))
+        }
+
+        fn _listar_productos(&self) -> Vec<Producto> {
+            let mut resultado = Vec::new();
+            for i in 0..self.v_productos.len() {
+                if let Some(prod_id) = self.v_productos.get(i) {
+                    if let Some(producto) = self.m_productos.get(prod_id) {
+                        resultado.push(producto);
+                    }
+                }
+            }
+            resultado
+        }
+
+        fn get_producto_by_name(
+            &self,
+            nombre: &String,
+            categoria: &Categoria,
+        ) -> Result<u128, ErroresContrato> {
+            for i in 0..self.v_productos.len() {
+                //
+                let prod_id = self
+                    .v_productos
+                    .get(i)
+                    .ok_or(ErroresContrato::ProductoInexistente)?;
+                let producto = self
+                    .m_productos
+                    .get(prod_id)
+                    .ok_or(ErroresContrato::ProductoInexistente)?;
+                if producto.nombre == *nombre && producto.categoria == *categoria {
+                    return Ok(*prod_id);
+                }
+            }
+            Err(ErroresContrato::ProductoInexistente)
+        }
+
+        fn get_producto_by_id(&self, id_producto: u128) -> Result<Producto, ErroresContrato> {
+            let producto = self
+                .m_productos
+                .get(&id_producto)
+                .ok_or(ErroresContrato::ProductoInexistente)?;
+            Ok(producto)
+        }
+    }
+
+    impl GestionUsuario for Contrato {
+        fn _registrar_usuario(
+            &mut self,
+            id: AccountId,
+            nombre: String,
+            mail: String,
+            roles: Vec<Rol>,
+        ) -> Result<String, ErroresContrato> {
+            // Verifico que el usuario y el mail no existan
+            if self.get_usuario_by_id(&id).is_ok() {
+                return Err(ErroresContrato::UsuarioYaExistente);
+            };
+            if self.get_usuario_by_mail(&mail).is_ok() {
+                return Err(ErroresContrato::MailYaExistente);
+            };
+
+            // Instancio nuevo usuario
+            let usuario = Usuario {
+                mail,
+                nombre: nombre.clone(),
+                roles,
+            };
+
+            // Inserto el usuario tanto en el Mapping como en el Vec
+            self.m_usuarios.insert(id, &usuario);
+            self.v_usuarios.push(id);
+
+            Ok(String::from("El usuario fue registrado correctamente"))
+        }
+
+        fn _listar_usuarios(&self) -> Vec<Usuario> {
+            let mut resultado = Vec::new();
+            for i in 0..self.v_usuarios.len() {
+                if let Some(account_id) = self.v_usuarios.get(i) {
+                    if let Some(usuario) = self.m_usuarios.get(account_id) {
+                        resultado.push(usuario);
+                    }
+                }
+            }
+            resultado
+        }
+
+        /// Verifica si ya existe un usuario con el mail dado
+        fn get_usuario_by_mail(&self, mail: &str) -> Result<Usuario, ErroresContrato> {
+            for i in 0..self.v_usuarios.len() {
+                if let Some(account_id) = self.v_usuarios.get(i) {
+                    if let Some(usuario) = self.m_usuarios.get(account_id) {
+                        if usuario.mail == mail {
+                            return Ok(usuario);
+                        }
+                    }
+                }
+            }
+            Err(ErroresContrato::MailInexistente)
+        }
+
+        /// Verifica si existe un usuario con el AccountId dado
+        fn get_usuario_by_id(&self, id: &AccountId) -> Result<Usuario, ErroresContrato> {
+            self.m_usuarios
+                .get(id)
+                .ok_or(ErroresContrato::CuentaNoRegistrada)
+        }
+    }
+
+    impl GestionOrden for Contrato {
+        fn _registrar_orden(
+            &mut self,
+            id_publicacion: u128,
+            id_comprador: AccountId,
+            cantidad: u32,
+        ) -> Result<String, ErroresContrato> {
+            //TODO: Chequear si se dispone de suficiente stock en la publi para la cantidad solicitada
+
+            let id = self
+                .v_ordenes
+                .len()
+                .checked_add(1)
+                .ok_or(ErroresContrato::MaximoAlcanzado)? as u128;
+
+            let publicacion = self
+                .m_publicaciones
+                .get(id_publicacion)
+                .ok_or(ErroresContrato::PublicacionNoExiste)?;
+
+            let producto = self
+                .m_productos
+                .get(publicacion.id_producto)
+                .ok_or(ErroresContrato::PublicacionNoExiste)?;
+
+            let precio_total = producto
+                .precio
+                .checked_mul(cantidad as u128)
+                .ok_or(ErroresContrato::MaximoAlcanzado)?;
+
+            let orden = Orden::new(
+                id,
+                id_publicacion,
+                publicacion.id_publicador,
+                id_comprador,
+                cantidad,
+                precio_total,
+            );
+
+            self.m_ordenes.insert(id, &orden);
+            self.v_ordenes.push(id);
+
+            //TODO: Descontar el stock de la cantidad de la publicacion.
+            //      Si la cantidad llega a 0, la publicacion deberia desactivarse.
+
+            Ok(String::from("Orden generada correctamente"))
+        }
+
+        fn _listar_ordenes(&self) -> Vec<Orden> {
+            let mut resultado = Vec::new();
+            for i in 0..self.v_ordenes.len() {
+                if let Some(id_orden) = self.v_ordenes.get(i) {
+                    if let Some(orden) = self.m_ordenes.get(id_orden) {
+                        resultado.push(orden);
+                    }
+                }
+            }
+            resultado
+        }
+
+        fn _enviar_orden(&mut self, id_orden: u128) -> Result<(), ErroresContrato> {
+            let mut orden = self
+                .m_ordenes
+                .get(id_orden)
+                .ok_or(ErroresContrato::OrdenInexistente)?;
+
+            match orden.status {
+                EstadoOrden::Pendiente => {
+                    orden.status = EstadoOrden::Enviada;
+                    self.m_ordenes.insert(id_orden, &orden);
+                    Ok(())
+                }
+                _ => Err(ErroresContrato::OrdenNoPendiente),
             }
         }
 
+        fn _recibir_orden(&mut self, id_orden: u128) -> Result<(), ErroresContrato> {
+            let mut orden = self
+                .m_ordenes
+                .get(id_orden)
+                .ok_or(ErroresContrato::OrdenInexistente)?;
+
+            match orden.status {
+                EstadoOrden::Enviada => {
+                    orden.status = EstadoOrden::Recibida;
+                    self.m_ordenes.insert(id_orden, &orden);
+                    Ok(())
+                }
+                _ => Err(ErroresContrato::OrdenNoEnviada),
+            }
+        }
+
+        fn _cancelar_orden(&mut self, id_orden: u128) -> Result<(), ErroresContrato> {
+            let mut orden = self
+                .m_ordenes
+                .get(id_orden)
+                .ok_or(ErroresContrato::OrdenInexistente)?;
+
+            match orden.status {
+                EstadoOrden::Enviada => Err(ErroresContrato::OrdenNoEnviada),
+                _ => {
+                    orden.status = EstadoOrden::Recibida;
+                    self.m_ordenes.insert(id_orden, &orden);
+                    Ok(())
+                }
+            }
+        }
+    }
+
+    impl GestionPublicacion for Contrato {
+        fn _registrar_publicacion(
+            &mut self,
+            id_producto: u128,
+            id_publicador: AccountId,
+            cantidad: u128,
+        ) -> Result<String, ErroresContrato> {
+            //TODO: chequear si se dispone del stock del Producto antes de generar la publicacion
+
+            let id = self
+                .v_ordenes
+                .len()
+                .checked_add(1)
+                .ok_or(ErroresContrato::MaximoAlcanzado)? as u128;
+
+            let publicacion = Publicacion::new(id, id_producto, id_publicador, cantidad);
+
+            self.m_publicaciones.insert(id, &publicacion);
+            self.v_publicaciones.push(id);
+
+            //TODO: Descontar el stock de la cantidad del Producto.
+
+            Ok(String::from("Publicacion registrada correctamente!"))
+        }
+
+        fn _listar_publicaciones(&self) -> Vec<Publicacion> {
+            let mut resultado = Vec::new();
+            for i in 0..self.v_publicaciones.len() {
+                if let Some(publi_id) = self.v_publicaciones.get(i) {
+                    if let Some(publi) = self.m_publicaciones.get(publi_id) {
+                        resultado.push(publi);
+                    }
+                }
+            }
+            resultado
+        }
+    }
+
+    impl Contrato {
+        /// Constructor del contrato.
+        ///
+        /// Inicializa todas las estructuras de almacenamiento (`Mapping` y `Vec`) vacías.
+        ///
+        /// Se ejecuta una única vez al desplegar el contrato en la blockchain.
+        /// No realiza ninguna lógica adicional.
+        ///
+        /// # Retorna
+        /// Una instancia del contrato lista para ser utilizada.
+        #[ink(constructor)]
+        pub fn new() -> Self {
+            Self {
+                m_productos: Mapping::default(),
+                m_usuarios: Mapping::default(),
+                m_ordenes: Mapping::default(),
+                m_publicaciones: Mapping::default(),
+                v_publicaciones: Vec::new(),
+                v_ordenes: Vec::new(),
+                v_productos: Vec::new(),
+                v_usuarios: Vec::new(),
+            }
+        }
+
+        /// Registra un nuevo usuario en el contrato, vinculándolo con su AccountId.
+        ///
+        /// # Parámetros
+        /// - `nombre`: Nombre del usuario.
+        /// - `mail`: Correo electrónico del usuario.
+        /// - `roles`: Lista de roles asignados al usuario (Comprador, Vendedor).
+        ///
+        /// # Errores
+        /// - `UsuarioYaExistente` si el usuario ya está registrado.
+        /// - `MailYaExistente` si ya hay un usuario registrado con ese mail.
         #[ink(message)]
-        pub fn agregar_producto(
+        pub fn registrar_usuario(
+            &mut self,
+            nombre: String,
+            mail: String,
+            roles: Vec<Rol>,
+        ) -> Result<String, ErroresContrato> {
+            return self._registrar_usuario(self.env().caller(), nombre, mail, roles);
+        }
+
+        /// Registra un nuevo producto en el contrato, asignándolo al AccountId que lo publica.
+        ///
+        /// # Parámetros
+        /// - `nombre`: Nombre del producto.
+        /// - `categoria`: Categoría del producto.
+        /// - `cantidad`: Cantidad disponible.
+        /// - `precio`: Precio unitario.
+        /// - `descripcion`: Descripción del producto.
+        ///
+        /// # Requisitos
+        /// - El usuario debe estar registrado previamente.
+        ///
+        /// # Errores
+        /// - `CuentaNoRegistrada` si el usuario no está registrado.
+        /// - `ProductoYaExistente` si ya existe un producto con ese nombre y categoría.
+        /// - `MaximoAlcanzado` si no se puede generar un nuevo ID.
+        #[ink(message)]
+        pub fn registrar_producto(
             &mut self,
             nombre: String,
             categoria: Categoria,
@@ -96,157 +589,173 @@ mod contrato {
             descripcion: String,
         ) -> Result<String, ErroresContrato> {
             // Comprobar que el usuario esta registrado en la plataforma
-            let id_cuenta = self.env().caller();
-            if !self.existe_usuario(&id_cuenta) {
-                return Err(ErroresContrato::CuentaNoRegistrada);
-            };
-            // Comprobar que el producto no exista chequeando nombre y categoria
-            // Agregar producto
-            let id = self
-                .actual_id_prod
-                .checked_add(1)
-                .ok_or(ErroresContrato::SeFueALaMierdaElID)?;
-
-            let nuevo_producto = Producto {
-                id,
-                nombre,
-                categoria,
-                cantidad,
-                precio,
-                descripcion,
-            };
-
-            self.map_productos.insert(id, &nuevo_producto);
-            self.vec_productos.push(id);
-            self.actual_id_prod = id;
-            Ok(nuevo_producto.nombre)
+            self._usuario_existe()?;
+            return self._agregar_producto(nombre, categoria, cantidad, precio, descripcion);
         }
 
+        /// Publica un producto previamente registrado en el contrato, generando una publicación activa.
+        ///
+        /// # Parámetros
+        /// - `id_producto`: ID del producto a publicar.
+        /// - `cantidad`: Cantidad disponible para la publicación.
+        ///
+        /// # Requisitos
+        /// - El caller debe estar registrado y tener rol de `Vendedor`.
+        ///
+        /// # Errores
+        /// - `CuentaNoRegistrada` si el caller no está registrado.
+        /// - `UsuarioSinRoles` si el caller no tiene el rol adecuado.
+        /// - `ProductoInexistente` si el producto no existe.
+        #[ink(message)]
+        pub fn publicar_producto(
+            &mut self,
+            id_producto: u128,
+            cantidad: u128,
+        ) -> Result<String, ErroresContrato> {
+            // Compruebo que el usuario existe y posee rol de vendedor
+            self._usuario_con_rol(Rol::Vendedor)?;
+
+            //Registro publicacion
+            let id_comprador = self.env().caller();
+            self._registrar_publicacion(id_producto, id_comprador, cantidad)?;
+
+            Ok(String::from("Publicacion creada correctamente!"))
+        }
+
+        /// Crea una orden de compra sobre una publicación activa.
+        ///
+        /// # Parámetros
+        /// - `id_publicacion`: ID de la publicación a comprar.
+        /// - `cantidad`: Cantidad solicitada.
+        ///
+        /// # Requisitos
+        /// - El caller debe estar registrado y tener rol de `Comprador`.
+        ///
+        /// # Errores
+        /// - `CuentaNoRegistrada` si el caller no está registrado.
+        /// - `UsuarioSinRoles` si no tiene el rol correspondiente.
+        /// - `PublicacionNoExiste` si no existe la publicación.
+        /// - `ProductoInexistente` si el producto vinculado a la publicación no existe.
+        #[ink(message)]
+        pub fn comprar_producto(
+            &mut self,
+            id_publicacion: u128,
+            cantidad: u32,
+        ) -> Result<String, ErroresContrato> {
+            // Compruebo que el usuario existe y posee rol de comprador
+            self._usuario_con_rol(Rol::Comprador)?;
+
+            //Registro orden de compra
+            let id_comprador = self.env().caller();
+            self._registrar_orden(id_publicacion, id_comprador, cantidad)?;
+            Ok(String::from("Orden emitida correctamente!"))
+        }
+
+        /// Devuelve una lista de todos los productos registrados en el contrato.
         #[ink(message)]
         pub fn listar_productos(&self) -> Vec<Producto> {
-            let mut resultado = Vec::new();
-            for i in 0..self.vec_productos.len() {
-                if let Some(prod_id) = self.vec_productos.get(i) {
-                    if let Some(producto) = self.map_productos.get(prod_id) {
-                        resultado.push(producto);
-                    }
-                }
-            }
-            resultado
+            self._listar_productos()
         }
 
+        /// Marca una orden como `Enviada`.
+        ///
+        /// # Parámetros
+        /// - `id_orden`: ID de la orden a actualizar.
+        ///
+        /// # Requisitos
+        /// - El caller debe estar registrado y tener rol de `Vendedor`.
+        ///
+        /// # Errores
+        /// - `OrdenInexistente` si no existe la orden.
+        /// - `OrdenNoPendiente` si la orden ya fue enviada, recibida o cancelada.
+        /// - `CuentaNoRegistrada` si el caller no está registrado.
+        /// - `UsuarioSinRoles` si no tiene el rol correspondiente.
         #[ink(message)]
-        pub fn publicar_producto(&self) {}
+        pub fn enviar_producto(&mut self, id_orden: u128) -> Result<String, ErroresContrato> {
+            // Compruebo que el usuario existe y posee rol de vendedor
+            self._usuario_con_rol(Rol::Vendedor)?;
+            self._enviar_orden(id_orden)?;
+            Ok(String::from("La orden fue cancelada correctamente"))
+        }
 
+        /// Marca una orden como `Recibida`.
+        ///
+        /// # Parámetros
+        /// - `id_orden`: ID de la orden a actualizar.
+        ///
+        /// # Requisitos
+        /// - El caller debe estar registrado y tener rol de `Comprador`.
+        ///
+        /// # Errores
+        /// - `OrdenInexistente` si no existe la orden.
+        /// - `OrdenNoEnviada` si la orden aún no fue enviada.
+        /// - `CuentaNoRegistrada` si el caller no está registrado.
+        /// - `UsuarioSinRoles` si no tiene el rol correspondiente.
         #[ink(message)]
-        pub fn registrar_usuario(
-            &mut self,
-            nombre: String,
-            mail: String,
-            roles: Vec<Roles>,
-        ) -> Result<String, ErroresContrato> {
-            let id_usuario = self.env().caller();
-            return self._registrar_usuario(id_usuario, nombre, mail, roles);
+        pub fn recibir_producto(&mut self, id_orden: u128) -> Result<String, ErroresContrato> {
+            // Compruebo que el usuario existe y posee rol de vendedor
+            self._usuario_con_rol(Rol::Comprador)?;
+            self._recibir_orden(id_orden)?;
+            Ok(String::from("La orden fue cancelada correctamente"))
         }
 
-        fn _registrar_usuario(
-            &mut self,
-            account_id: AccountId,
-            nombre: String,
-            mail: String,
-            roles: Vec<Roles>,
-        ) -> Result<String, ErroresContrato> {
-            // Verifico que el usuario y el mail no existan
-            if self.existe_usuario(&account_id) {
-                return Err(ErroresContrato::UsuarioYaExistente);
-            };
-            if self.existe_mail(&mail) {
-                return Err(ErroresContrato::MailYaExistente);
-            };
-
-            // Instancio nuevo usuario
-            let user = Usuario {
-                mail: mail,
-                nombre: nombre.clone(),
-                roles: roles,
-            };
-
-            // Inserto el usuario tanto en el Mapping como en el Vec
-            self.insertar_usuario(account_id, user);
-
-            // Genero el mensaje de retorno
-            let retorno = {
-                let mut s = String::from("Se registro el usuario -> ");
-                s.push_str(&nombre);
-                s
-            };
-
-            Ok(retorno)
+        /// Cancela una orden pendiente o aún no enviada.
+        ///
+        /// # Parámetros
+        /// - `id_orden`: ID de la orden a cancelar.
+        ///
+        /// # Requisitos
+        /// - El caller debe estar registrado y tener rol de `Comprador`.
+        ///
+        /// # Errores
+        /// - `OrdenInexistente` si la orden no existe.
+        /// - `OrdenYaCancelada` si ya fue cancelada previamente.
+        /// - `CuentaNoRegistrada` si el caller no está registrado.
+        /// - `UsuarioSinRoles` si no tiene el rol correspondiente.
+        #[ink(message)]
+        pub fn cancelar_producto(&mut self, id_orden: u128) -> Result<String, ErroresContrato> {
+            // Compruebo que el usuario existe y posee rol de vendedor
+            self._usuario_con_rol(Rol::Comprador)?; //TODO: me parece que habia una logica adicional en el cancelar... CHEQUEAR
+            self._cancelar_orden(id_orden)?;
+            Ok(String::from("La orden fue cancelada correctamente"))
         }
 
+        /// Devuelve una lista de todos los usuarios registrados en el contrato.
         #[ink(message)]
         pub fn listar_usuarios(&self) -> Vec<Usuario> {
-            let mut resultado = Vec::new();
-            for i in 0..self.vec_usuarios.len() {
-                if let Some(account_id) = self.vec_usuarios.get(i) {
-                    if let Some(usuario) = self.map_usuarios.get(account_id) {
-                        resultado.push(usuario);
-                    }
-                }
+            self._listar_usuarios()
+        }
+
+        /// Devuelve una lista de todas las publicaciones en el contrato.
+        #[ink(message)]
+        pub fn _listar_publicaciones(&self) -> Vec<Publicacion> {
+            self._listar_publicaciones()
+        }
+
+        /// Devuelve una lista de todas las ordenes de compra registradas en el contrato.
+        #[ink(message)]
+        pub fn listar_ordenes(&self) -> Vec<Orden> {
+            self._listar_ordenes()
+        }
+
+        fn _usuario_existe(&self) -> Result<(), ErroresContrato> {
+            let caller = &self.env().caller();
+            if self.get_usuario_by_id(caller).is_err() {
+                return Err(ErroresContrato::CuentaNoRegistrada);
+            };
+            Ok(())
+        }
+
+        fn _usuario_con_rol(&self, rol: Rol) -> Result<(), ErroresContrato> {
+            let caller = self.env().caller();
+            let usuario = self
+                .m_usuarios
+                .get(caller)
+                .ok_or(ErroresContrato::CuentaNoRegistrada)?;
+            if usuario.roles.contains(&rol) {
+                return Ok(());
             }
-            resultado
+            Err(ErroresContrato::UsuarioSinRoles)
         }
-
-        /// Inserta un usuario
-        fn insertar_usuario(&mut self, id: AccountId, usuario: Usuario) {
-            self.map_usuarios.insert(id, &usuario);
-            self.vec_usuarios.push(id);
-        }
-
-        /// Verifica si ya existe un usuario con el mail dado
-        fn existe_mail(&self, mail: &str) -> bool {
-            for i in 0..self.vec_usuarios.len() {
-                if let Some(account_id) = self.vec_usuarios.get(i) {
-                    if let Some(usuario) = self.map_usuarios.get(account_id) {
-                        if usuario.mail == mail {
-                            return true;
-                        }
-                    }
-                }
-            }
-            false
-        }
-
-        /// Verifica si existe un usuario con el AccountId dado
-        fn existe_usuario(&self, id: &AccountId) -> bool {
-            if !self.map_usuarios.contains(id) {
-                return false;
-            }
-            true
-        }
-
-        // /// Inserta un usuario si su id no existe aún
-        // #[ink(message)]
-        // pub fn eliminar_usuario(&mut self, account_id: AccountId) -> Result<(), ErroresContrato> {
-        //     if !self.map_usuarios.contains(account_id) {
-        //         return Err(ErroresContrato::CuentaNoRegistrada);
-        //     }
-
-        //     // Eliminar del mapa
-        //     self.map_usuarios.remove(account_id);
-
-        //     // Eliminar del vector
-        //     let mut nuevo_vec = Vec::new();
-        //     for i in 0..self.vec_usuarios.len() {
-        //         if let Some(id) = self.vec_usuarios.get(i) {
-        //             if *id != account_id {
-        //                 nuevo_vec.push(id);
-        //             }
-        //         }
-        //     }
-        //     self.vec_usuarios = nuevo_vec;
-
-        //     Ok(())
-        // }
     }
 }
