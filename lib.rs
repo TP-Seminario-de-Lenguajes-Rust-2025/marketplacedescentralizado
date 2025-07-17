@@ -33,6 +33,7 @@ mod contrato {
         PublicacionNoExiste,
         CategoriaYaExistente,
         CategoriaInexistente,
+        SinStockDisponible,
     }
 
     #[derive(Encode, Decode, TypeInfo, Debug, PartialEq)]
@@ -194,6 +195,29 @@ mod contrato {
         fn clean_cat_name(&self, nombre: &String) -> String;
     }
 
+    pub trait ControlStock {
+        fn get_cantidad(&self) -> u32;
+
+        fn set_cantidad(&mut self, nueva: u32);
+
+        fn descontar_stock(&mut self, cantidad_a_descontar: u32) -> Result<(), ErroresContrato> {
+            self.chequear_stock_disponible(cantidad_a_descontar)?;
+            let nueva_cantidad = self.get_cantidad();
+            self.set_cantidad(nueva_cantidad);
+            Ok(())
+        }
+
+        fn chequear_stock_disponible(
+            &self,
+            cantidad_a_descontar: u32,
+        ) -> Result<(), ErroresContrato> {
+            if self.get_cantidad() < cantidad_a_descontar {
+                return Err(ErroresContrato::SinStockDisponible);
+            }
+            Ok(())
+        }
+    }
+
     impl Producto {
         pub fn new(
             id: u32,
@@ -211,6 +235,26 @@ mod contrato {
                 precio,
                 descripcion,
             }
+        }
+    }
+
+    impl ControlStock for Producto {
+        fn get_cantidad(&self) -> u32 {
+            self.cantidad
+        }
+
+        fn set_cantidad(&mut self, nueva: u32) {
+            self.cantidad = nueva;
+        }
+    }
+
+    impl ControlStock for Publicacion {
+        fn get_cantidad(&self) -> u32 {
+            self.cantidad
+        }
+
+        fn set_cantidad(&mut self, nueva: u32) {
+            self.cantidad = nueva;
         }
     }
 
@@ -275,6 +319,7 @@ mod contrato {
             if self.get_producto_by_name(&nombre, &cate).is_ok() {
                 return Err(ErroresContrato::ProductoYaExistente);
             }
+
             // Agregar producto
             let id = self.productos.len();
 
@@ -392,25 +437,29 @@ mod contrato {
             id_comprador: AccountId,
             cantidad: u32,
         ) -> Result<String, ErroresContrato> {
-            //TODO: Chequear si se dispone de suficiente stock en la publi para la cantidad solicitada
-
-            let id = self.ordenes.len();
-
-            let publicacion = self
+            // Recupero datos de la publicacion
+            let mut publicacion = self
                 .publicaciones
                 .get(id_publicacion)
                 .ok_or(ErroresContrato::PublicacionNoExiste)?;
 
+            // Recupero datos del producto de la publicacion
             let producto = self
                 .productos
                 .get(publicacion.id_producto)
-                .ok_or(ErroresContrato::PublicacionNoExiste)?;
+                .ok_or(ErroresContrato::ProductoInexistente)?;
 
+            // Chequeo que la publicacion tenga suficiente stock contra la cantidad solicitada en la orden
+            publicacion.chequear_stock_disponible(cantidad)?;
+
+            // Calculo precio total
             let precio_total = producto
                 .precio
                 .checked_mul(cantidad as u128)
                 .ok_or(ErroresContrato::MaximoAlcanzado)?;
 
+            // Genero orden
+            let id = self.ordenes.len();
             let orden = Orden::new(
                 id,
                 id_publicacion,
@@ -419,11 +468,14 @@ mod contrato {
                 cantidad,
                 precio_total,
             );
-
             self.ordenes.push(&orden);
 
-            //TODO: Descontar el stock de la cantidad de la publicacion.
-            //      Si la cantidad llega a 0, la publicacion deberia desactivarse.
+            // Descuento stock de la publicacion. Si el stock es 0 la desactivo.
+            publicacion.descontar_stock(cantidad)?;
+            if publicacion.cantidad == 0 {
+                publicacion.activa = false
+            }
+            self.publicaciones.set(id_publicacion, &publicacion);
 
             Ok(String::from("Orden generada correctamente"))
         }
@@ -494,15 +546,23 @@ mod contrato {
             id_publicador: AccountId,
             cantidad: u32,
         ) -> Result<String, ErroresContrato> {
-            //TODO: chequear si se dispone del stock del Producto antes de generar la publicacion
+            // Recupero datos del producto de la publicacion
+            let mut producto = self
+                .productos
+                .get(id_producto)
+                .ok_or(ErroresContrato::ProductoInexistente)?;
 
+            // Chequeo si hay stock del producto para crear la publicacion
+            producto.chequear_stock_disponible(cantidad)?;
+
+            // Genero nueva publicacion
             let id = self.publicaciones.len();
-
             let publicacion = Publicacion::new(id, id_producto, id_publicador, cantidad);
-
             self.publicaciones.push(&publicacion);
 
-            //TODO: Descontar el stock de la cantidad del Producto.
+            //Descuento el stock del Producto.
+            producto.descontar_stock(cantidad)?;
+            self.productos.set(id_producto, &producto);
 
             Ok(String::from("Publicacion registrada correctamente!"))
         }
