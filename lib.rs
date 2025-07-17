@@ -31,14 +31,8 @@ mod contrato {
         OrdenYaCancelada,
         OrdenInexistente,
         PublicacionNoExiste,
-    }
-
-    #[derive(Encode, Decode, TypeInfo, Debug, PartialEq)]
-    #[cfg_attr(feature = "std", derive(StorageLayout))]
-    pub struct Categoria {
-        id: u128,
-        nombre: String,
-        descripcion: String,
+        CategoriaYaExistente,
+        CategoriaInexistente,
     }
 
     #[derive(Encode, Decode, TypeInfo, Debug, PartialEq)]
@@ -55,6 +49,14 @@ mod contrato {
         Enviada,
         Recibida,
         Cancelada,
+    }
+
+    #[derive(Encode, Decode, TypeInfo, Debug, PartialEq)]
+    #[cfg_attr(feature = "std", derive(StorageLayout))]
+    pub struct Categoria {
+        id: u32,
+        nombre: String,
+        descripcion: String,
     }
 
     #[derive(Encode, Decode, Debug, PartialEq)]
@@ -178,6 +180,18 @@ mod contrato {
         fn _listar_publicaciones(&self) -> Vec<Publicacion>;
     }
 
+    pub trait GestionCategoria {
+        fn _registrar_categoria(
+            &mut self,
+            nombre: String,
+            descripcion: String,
+        ) -> Result<String, ErroresContrato>;
+
+        fn _listar_categorias(&self) -> Vec<Categoria>;
+
+        fn get_categoria_by_name(&self, nombre: &String) -> Result<u32, ErroresContrato>;
+    }
+
     impl Producto {
         pub fn new(
             id: u32,
@@ -233,6 +247,16 @@ mod contrato {
         }
     }
 
+    impl Categoria {
+        pub fn new(id: u32, nombre: String, descripcion: String) -> Self {
+            Self {
+                id,
+                nombre,
+                descripcion,
+            }
+        }
+    }
+
     impl GestionProducto for Contrato {
         fn _agregar_producto(
             &mut self,
@@ -247,11 +271,7 @@ mod contrato {
                 return Err(ErroresContrato::ProductoYaExistente);
             }
             // Agregar producto
-            let id = self
-                .productos
-                .len()
-                .checked_add(1)
-                .ok_or(ErroresContrato::MaximoAlcanzado)? as u32;
+            let id = self.productos.len();
 
             let nuevo_producto =
                 Producto::new(id, nombre, categoria, cantidad, precio, descripcion);
@@ -370,11 +390,7 @@ mod contrato {
         ) -> Result<String, ErroresContrato> {
             //TODO: Chequear si se dispone de suficiente stock en la publi para la cantidad solicitada
 
-            let id = self
-                .ordenes
-                .len()
-                .checked_add(1)
-                .ok_or(ErroresContrato::MaximoAlcanzado)?;
+            let id = self.ordenes.len();
 
             let publicacion = self
                 .publicaciones
@@ -476,11 +492,7 @@ mod contrato {
         ) -> Result<String, ErroresContrato> {
             //TODO: chequear si se dispone del stock del Producto antes de generar la publicacion
 
-            let id = self
-                .publicaciones
-                .len()
-                .checked_add(1)
-                .ok_or(ErroresContrato::MaximoAlcanzado)?;
+            let id = self.publicaciones.len();
 
             let publicacion = Publicacion::new(id, id_producto, id_publicador, cantidad);
 
@@ -499,6 +511,47 @@ mod contrato {
                 }
             }
             resultado
+        }
+    }
+
+    impl GestionCategoria for Contrato {
+        fn _registrar_categoria(
+            &mut self,
+            nombre: String,
+            descripcion: String,
+        ) -> Result<String, ErroresContrato> {
+            //TODO: Chequeo si la categoria no existe actualmente
+            if self.get_categoria_by_name(&nombre).is_ok() {
+                return Err(ErroresContrato::CategoriaYaExistente);
+            }
+
+            // Agregar categoria
+            let id = self.categorias.len();
+            let nueva_categoria = Categoria::new(id, nombre, descripcion);
+            self.categorias.push(&nueva_categoria);
+
+            Ok(String::from("La categoria fue registrada correctamente"))
+        }
+
+        fn _listar_categorias(&self) -> Vec<Categoria> {
+            let mut resultado = Vec::new();
+            for i in 0..self.categorias.len() {
+                if let Some(categoria) = self.categorias.get(i) {
+                    resultado.push(categoria);
+                }
+            }
+            resultado
+        }
+
+        fn get_categoria_by_name(&self, nombre: &String) -> Result<u32, ErroresContrato> {
+            for i in 0..self.categorias.len() {
+                if let Some(categoria) = self.categorias.get(i) {
+                    if categoria.nombre == *nombre {
+                        return Ok(categoria.id);
+                    }
+                }
+            }
+            Err(ErroresContrato::CategoriaInexistente)
         }
     }
 
@@ -574,6 +627,29 @@ mod contrato {
             return self._agregar_producto(nombre, categoria, cantidad, precio, descripcion);
         }
 
+        /// Registra una nueva categoría de productos en el contrato.
+        ///
+        /// # Parámetros
+        /// - `nombre`: Nombre de la categoría a registrar.
+        /// - `descripcion`: Descripción detallada de la categoría.
+        ///
+        /// # Requisitos
+        /// - El caller debe estar previamente registrado como usuario.
+        ///
+        /// # Errores
+        /// - `CuentaNoRegistrada`: Si el usuario que intenta registrar la categoría no está registrado.
+        /// - `CategoriaYaExistente`: Si la categoria ya existe actualmente.
+        #[ink(message)]
+        pub fn registrar_categoria(
+            &mut self,
+            nombre: String,
+            descripcion: String,
+        ) -> Result<String, ErroresContrato> {
+            // Comprobar que el usuario esta registrado en la plataforma
+            self._usuario_existe()?;
+            return self._registrar_categoria(nombre, descripcion);
+        }
+
         /// Publica un producto previamente registrado en el contrato, generando una publicación activa.
         ///
         /// # Parámetros
@@ -630,12 +706,6 @@ mod contrato {
             let id_comprador = self.env().caller();
             self._registrar_orden(id_publicacion, id_comprador, cantidad)?;
             Ok(String::from("Orden emitida correctamente!"))
-        }
-
-        /// Devuelve una lista de todos los productos registrados en el contrato.
-        #[ink(message)]
-        pub fn listar_productos(&self) -> Vec<Producto> {
-            self._listar_productos()
         }
 
         /// Marca una orden como `Enviada`.
@@ -707,6 +777,12 @@ mod contrato {
             self._listar_usuarios()
         }
 
+        /// Devuelve una lista de todos los productos registrados en el contrato.
+        #[ink(message)]
+        pub fn listar_productos(&self) -> Vec<Producto> {
+            self._listar_productos()
+        }
+        
         /// Devuelve una lista de todas las publicaciones en el contrato.
         #[ink(message)]
         pub fn listar_publicaciones(&self) -> Vec<Publicacion> {
@@ -717,6 +793,12 @@ mod contrato {
         #[ink(message)]
         pub fn listar_ordenes(&self) -> Vec<Orden> {
             self._listar_ordenes()
+        }
+
+        /// Devuelve una lista de todas las categorias registradas en el contrato.
+        #[ink(message)]
+        pub fn listar_categorias(&self) -> Vec<Categoria> {
+            self._listar_categorias()
         }
 
         fn _usuario_existe(&self) -> Result<(), ErroresContrato> {
