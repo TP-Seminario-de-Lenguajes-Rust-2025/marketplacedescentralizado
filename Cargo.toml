@@ -12,6 +12,7 @@ base64ct = { version = "=1.6.0", default-features = false }
 scale = { package = "parity-scale-codec", version = "3", default-features = false, features = [
     "derive",
 ] }
+scale-info = { version = "2", default-features = false, features = ["derive"] }
 
 [dev-dependencies]
 ink_e2e = { version = "5.1.1" }

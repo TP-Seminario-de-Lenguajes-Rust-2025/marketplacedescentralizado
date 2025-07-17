@@ -6,74 +6,55 @@ mod contract {
         prelude::{string::String, vec::Vec},
         storage::{Mapping, StorageVec,traits::StorageLayout},
     };
+    use scale::{Decode, Encode};
+    use scale_info::TypeInfo;
+    //use scale_info::prelude::vec::Vec;
 
     const COMPRADOR:Rol = Rol::Comprador;
     const VENDEDOR:Rol = Rol::Vendedor;
 
-    // #[derive(Clone,Copy)]
-    // #[ink::scale_derive(Encode, Decode, TypeInfo)]
-    // #[cfg_attr(feature = "std", derive(ink::storage::traits::StorageLayout))]
-    // pub struct Decimal{
-    //     entero: u32,
-    //     decimal: u32
-    // }
-
-    // impl Decimal{
-    //     fn mult(&self, multiplicador: u32) -> Decimal{
-    //         let mut entero: u32 = self.entero.checked_mul(multiplicador).expect("hubo overflow xd");
-    //         let mut decimal: u32 = self.decimal.checked_mul(multiplicador).expect("hubo overflow xd");
-    //         if decimal.length()> self.decimal.length(){
-    //             entero = entero.checked_add(decimal.div_euclid(self.decimal.length().checked_mul(10).expect("hubo overflow xd"))).expect("hubo overflow xd");
-    //             decimal = decimal.checked_rem(self.decimal.length().checked_mul(10).expect("hubo overflow xd")).expect("hubo overflow xd");
-    //         }
-    //         Decimal{entero, decimal}
-    //     }
-    // }
-    
-    // trait Lengthable{
-    //     fn length(&self) -> u32;
-    // }
-
-    // impl Lengthable for u32{
-    //     fn length(&self) -> u32{
-    //         let mut n = *self;
-    //         let mut c: u32 = 0;
-    //         while n!=0_u32{
-    //             n/=10_u32;
-    //             c=c.checked_add(1).expect("como carajo hubo overflow aca xd"); //revisar
-    //         }
-    //         c
-    //     }
-    // }
 
     #[ink::scale_derive(Encode, Decode, TypeInfo)]
-    pub enum ErroresApp {
-        ErrorComun,
-        //ErrorInk(ink_env::Error)
+    #[derive(Debug)]
+    pub enum ErroresContrato {
+        UsuarioSinRoles,
+        UsuarioYaExistente,
+        CuentaNoRegistrada,
+        MailYaExistente,
+        MailInexistente,
+        ProductoInexistente,
+        ProductoYaExistente,
+        MaximoAlcanzado,
+        OrdenNoPendiente,
+        OrdenNoEnviada,
+        OrdenYaCancelada,
+        OrdenInexistente,
+        PublicacionNoExiste,
+        CategoriaYaExistente,
+        CategoriaInexistente,
     }
 
     ///Estructura principal del contrato
     #[ink(storage)]
     pub struct Sistema {
-        users: Mapping<AccountId, Usuario>,
-        user_ids: StorageVec<AccountId>,
-        //roles: Mapping<u32, Rol>,             //roles que existen
-        categorias: Mapping<u32, Categoria>,  //id_categ
-        ordenes_historico: StorageVec<Orden>, //registro de compras
+        m_usuarios: Mapping<AccountId, Usuario>,
+        v_usuarios: StorageVec<AccountId>,
         productos: StorageVec<Producto>,
-        publicaciones: Vec<Publicacion>, //capaz no un vec
+        ordenes: StorageVec<Orden>, 
+        publicaciones: StorageVec<Publicacion>,
+        categorias: StorageVec<Categoria>, 
     }
 
     impl Sistema {
         ///Construye el sistema
         #[ink(constructor)]
         pub fn new() -> Self {
-            Sistema {users: Mapping::new(), user_ids: StorageVec::new(), categorias: Mapping::new(), ordenes_historico:StorageVec::new(), productos:StorageVec::new(), publicaciones: Vec::new()}
+            Sistema {m_usuarios: Mapping::new(), v_usuarios: StorageVec::new(), productos: StorageVec::new(),ordenes: StorageVec::new(),  publicaciones: StorageVec::new(),categorias: StorageVec::new()}
         }
 
         ///Devuelve el usuario segun el AccountId provisto
-        fn get_user(&mut self, id:&AccountId) -> Result<Usuario,ErroresApp>{
-            if let Some(usuario) = self.users.try_get(id){
+        fn get_user(&mut self, id:&AccountId) -> Result<Usuario,ErroresContrato>{
+            if let Some(usuario) = self.m_usuarios.try_get(id){
                 usuario
             }else{todo!("error: no hay usuario registrado con el AccountId provisto")}
         }
@@ -83,7 +64,7 @@ mod contract {
             &mut self,
             nombre: String,
             mail: String,
-        ) -> Result<(), ErroresApp> {
+        ) -> Result<(), ErroresContrato> {
             let id = self.env().caller();
             return self._registrar_usuario(id, nombre, mail)
         }
@@ -93,9 +74,9 @@ mod contract {
             id: AccountId,
             nombre: String,
             mail: String,
-        ) -> Result<(), ErroresApp> {
+        ) -> Result<(), ErroresContrato> {
             if self.users.iter().any(|u| u.mail == mail) {
-                return Err(ErroresApp::ErrorComun); //error: ya existe un usario con el mail provisto
+                return Err(ErroresContrato::ErrorComun); //error: ya existe un usario con el mail provisto
             }
             let nuevo_usuario = Usuario::new(id, nombre, mail, Vec::new());
             self.users.push(nuevo_usuario);
@@ -110,7 +91,7 @@ mod contract {
             id_producto: u32,
             stock: u32,
             precio: Balance,
-        ) -> Result<(),ErroresApp>{
+        ) -> Result<(),ErroresContrato>{
             let id_usuario = self.env().caller();
             return self._crear_publicacion(id_producto, id_usuario, stock, precio)
         }
@@ -120,8 +101,8 @@ mod contract {
             id_usuario: AccountId,
             stock: u32,
             precio: Balance,            
-        ) -> Result<(),ErroresApp> {
-            let id = self.publicaciones.len().checked_add(1).ok_or(ErroresApp::ErrorComun)? as u32;
+        ) -> Result<(),ErroresContrato> {
+            let id = self.publicaciones.len().checked_add(1).ok_or(ErroresContrato::ErrorComun)? as u32;
             let usuario = self.get_user(&id_usuario)?;
             if usuario.has_role(VENDEDOR){
                 if let Some(index) = id_producto.checked_sub(1){
@@ -133,10 +114,10 @@ mod contract {
             } else {todo!("error: usuario no tiene el rol apropiado")}
         }
 
-        fn descontar_stock_producto(&mut self, id:u32, cantidad:u32) -> Result<(), ErroresApp>{
-            let index = id.checked_sub(1).ok_or(ErroresApp::ErrorComun)?;
-            let producto = self.productos.get(index).ok_or(ErroresApp::ErrorComun)?;
-            producto.stock.checked_sub(cantidad).ok_or(ErroresApp::ErrorComun)?;
+        fn descontar_stock_producto(&mut self, id:u32, cantidad:u32) -> Result<(), ErroresContrato>{
+            let index = id.checked_sub(1).ok_or(ErroresContrato::ErrorComun)?;
+            let producto = self.productos.get(index).ok_or(ErroresContrato::ErrorComun)?;
+            producto.stock.checked_sub(cantidad).ok_or(ErroresContrato::ErrorComun)?;
             self.productos.set(index, &producto);
             Ok(())
         }
@@ -148,7 +129,7 @@ mod contract {
             descripcion: String,
             categoria: u32,
             stock: u32
-        ) -> Result<(),ErroresApp> {
+        ) -> Result<(),ErroresContrato> {
             let id_vendedor = self.env().caller();
             return self._crear_producto(id_vendedor, nombre, descripcion, categoria, stock)
         }
@@ -160,8 +141,8 @@ mod contract {
             descripcion: String,
             categoria: u32,
             stock: u32
-        ) -> Result<(),ErroresApp> {
-            let id = self.productos.len().checked_add(1).ok_or(ErroresApp::ErrorComun)?;
+        ) -> Result<(),ErroresContrato> {
+            let id = self.productos.len().checked_add(1).ok_or(ErroresContrato::ErrorComun)?;
             let usuario = self.get_user(&id_vendedor)?;
             if usuario.has_role(VENDEDOR){
                 if self.categorias.try_get(categoria).is_some() {  
@@ -193,7 +174,7 @@ mod contract {
             id_pub: u32,
             cantidad:u32,
             //precio_total: Decimal
-        )-> Result<(),ErroresApp>{
+        )-> Result<(),ErroresContrato>{
             let id_comprador = self.env().caller();
             return self.crear_orden(id_pub, id_comprador, cantidad);
         }
@@ -204,8 +185,8 @@ mod contract {
             id_comprador: AccountId,
             cantidad:u32,
             //precio_total: Decimal//esto deberia estar por parametro???
-        ) -> Result<(), ErroresApp>{
-            let id_orden = self.ordenes_historico.len().checked_add(1).ok_or(ErroresApp::ErrorComun)?;
+        ) -> Result<(), ErroresContrato>{
+            let id_orden = self.ordenes_historico.len().checked_add(1).ok_or(ErroresContrato::ErrorComun)?;
             let comprador = self.get_user(&id_comprador)?;
             let id_vendedor = self.get_id_vendedor(id_pub)?;
             let vendedor = self.get_user(&id_vendedor)?;
@@ -224,7 +205,7 @@ mod contract {
 
 
         /// Recibe un ID de una publicacion y devuelve AccountId del vendedor asociado o un Error
-        fn get_id_vendedor(&self, id_pub:u32) -> Result<AccountId,ErroresApp>{
+        fn get_id_vendedor(&self, id_pub:u32) -> Result<AccountId,ErroresContrato>{
             if let Some(publicacion) = self.publicaciones.iter().find(|p|p.id == id_pub){
                 Ok(publicacion.id_user)
             }else{
@@ -232,16 +213,16 @@ mod contract {
             }
         }
 
-        fn descontar_stock_publicacion(&mut self, id_pub:u32, cantidad:u32) -> Result<(),ErroresApp>{
-            let index = id_pub.checked_sub(1).ok_or(ErroresApp::ErrorComun)?;
+        fn descontar_stock_publicacion(&mut self, id_pub:u32, cantidad:u32) -> Result<(),ErroresContrato>{
+            let index = id_pub.checked_sub(1).ok_or(ErroresContrato::ErrorComun)?;
             if let Some(publicacion) = self.publicaciones.get_mut(index as usize){
-                publicacion.stock.checked_sub(cantidad).ok_or(ErroresApp::ErrorComun)?;
+                publicacion.stock.checked_sub(cantidad).ok_or(ErroresContrato::ErrorComun)?;
                 Ok(())
             }else{todo!("error: no habia publicacion en el indice")}
         }
 
         /// Recibe un ID de una publicacion y devuelve su stock
-        fn get_precio_unitario(&self, id_pub:u32) -> Result<Balance,ErroresApp>{
+        fn get_precio_unitario(&self, id_pub:u32) -> Result<Balance,ErroresContrato>{
             if let Some(publicacion) = self.publicaciones.iter().find(|p|p.id == id_pub){
                 Ok(publicacion.precio_unitario)
             }else{
@@ -286,14 +267,14 @@ mod contract {
             }
         }
 
-        pub fn registrar_comprador(&mut self) -> Result<(), ErroresApp>{
+        pub fn registrar_comprador(&mut self) -> Result<(), ErroresContrato>{
             if !self.has_role(COMPRADOR){
                 self.roles.push(COMPRADOR);
                 Ok(())
             }else{todo!("error: el usuario ya es Comprador")}
         }
 
-        pub fn registrar_vendedor(&mut self) -> Result<(), ErroresApp>{
+        pub fn registrar_vendedor(&mut self) -> Result<(), ErroresContrato>{
             if !self.has_role(VENDEDOR){
                 self.roles.push(VENDEDOR);
                 Ok(())
@@ -317,7 +298,7 @@ mod contract {
 
     }
 
-    /// Estructura correspondiente al raiting de un usuario
+    /// Estructura correspondiente al rating de un usuario
     #[cfg_attr(feature = "std", derive(ink::storage::traits::StorageLayout))]
     #[ink::scale_derive(Encode, Decode, TypeInfo)]
     #[derive(Clone)]
@@ -426,9 +407,8 @@ mod contract {
             self.activa
         }
 
-        // pub fn actualizar_stock(&mut self, delta: i32) -> Result<(), ErroresApp> {}
+        // pub fn actualizar_stock(&mut self, delta: i32) -> Result<(), ErroresContrato> {}
 
-        //nueva implementacion del new de publicacion sin usar uuid
         pub fn new(id: u32, id_producto: u32, id_user: AccountId, stock: u32, precio_unitario:Balance) -> Publicacion {
             Publicacion {
                 id,
