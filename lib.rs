@@ -32,6 +32,8 @@ mod contract {
         PublicacionNoExiste,
         CategoriaYaExistente,
         CategoriaInexistente,
+        StockPublicacionInsuficiente,
+        StockProductoInsuficiente,
     }
 
     ///Estructura principal del contrato
@@ -102,23 +104,22 @@ mod contract {
             stock: u32,
             precio: Balance,            
         ) -> Result<(),ErroresContrato> {
-            let id = self.publicaciones.len().checked_add(1).ok_or(ErroresContrato::ErrorComun)? as u32;
+            let id = self.publicaciones.len();
             let usuario = self.get_user(&id_usuario)?;
             if usuario.has_role(VENDEDOR){
                 if let Some(index) = id_producto.checked_sub(1){
                     self.descontar_stock_producto(id_producto, stock)?;
                     let p = Publicacion::new(id, id_producto, id_usuario, stock, precio);
-                    self.publicaciones.push(p);
+                    self.publicaciones.push(&p);
                     Ok(())
                 }else{todo!("error: indice invalido (<0)")}
             } else {todo!("error: usuario no tiene el rol apropiado")}
         }
 
         fn descontar_stock_producto(&mut self, id:u32, cantidad:u32) -> Result<(), ErroresContrato>{
-            let index = id.checked_sub(1).ok_or(ErroresContrato::ErrorComun)?;
-            let producto = self.productos.get(index).ok_or(ErroresContrato::ErrorComun)?;
-            producto.stock.checked_sub(cantidad).ok_or(ErroresContrato::ErrorComun)?;
-            self.productos.set(index, &producto);
+            let producto = self.productos.get(id).ok_or(ErroresContrato::ProductoInexistente)?;//misma duda que en get_id_vendedor
+            producto.stock.checked_sub(cantidad).ok_or(ErroresContrato::StockProductoInsuficiente)?;
+            self.productos.set(id, &producto);
             Ok(())
         }
 
@@ -142,7 +143,7 @@ mod contract {
             categoria: u32,
             stock: u32
         ) -> Result<(),ErroresContrato> {
-            let id = self.productos.len().checked_add(1).ok_or(ErroresContrato::ErrorComun)?;
+            let id = self.productos.len();
             let usuario = self.get_user(&id_vendedor)?;
             if usuario.has_role(VENDEDOR){
                 if self.categorias.try_get(categoria).is_some() {  
@@ -186,7 +187,7 @@ mod contract {
             cantidad:u32,
             //precio_total: Decimal//esto deberia estar por parametro???
         ) -> Result<(), ErroresContrato>{
-            let id_orden = self.ordenes_historico.len().checked_add(1).ok_or(ErroresContrato::ErrorComun)?;
+            let id_orden = self.ordenes.len();
             let comprador = self.get_user(&id_comprador)?;
             let id_vendedor = self.get_id_vendedor(id_pub)?;
             let vendedor = self.get_user(&id_vendedor)?;
@@ -197,7 +198,7 @@ mod contract {
                 if cantidad !=0{
                     self.descontar_stock_publicacion(id_pub, cantidad)?;
                     let orden = Orden::new(id_orden, id_pub, id_vendedor, id_comprador, cantidad, precio_total);
-                    self.ordenes_historico.push(&orden);
+                    self.ordenes.push(&orden);
                     Ok(())                
                 }else{todo!("error: la cantidad es mayor a cero y hay stock suficiente")}
             }else{ todo!("error: los usuarios no cumplen con los roles adecuados")}
@@ -206,27 +207,27 @@ mod contract {
 
         /// Recibe un ID de una publicacion y devuelve AccountId del vendedor asociado o un Error
         fn get_id_vendedor(&self, id_pub:u32) -> Result<AccountId,ErroresContrato>{
-            if let Some(publicacion) = self.publicaciones.iter().find(|p|p.id == id_pub){
+            if let Some(publicacion) = self.publicaciones.get(id_pub){ //get saca el elemento del vector (hay que volver a insertarlo o no?)
                 Ok(publicacion.id_user)
             }else{
-                todo!("'error de no encontrar la publicacion con el id provisto")
+                Err(ErroresContrato::PublicacionNoExiste)
             }
         }
 
         fn descontar_stock_publicacion(&mut self, id_pub:u32, cantidad:u32) -> Result<(),ErroresContrato>{
-            let index = id_pub.checked_sub(1).ok_or(ErroresContrato::ErrorComun)?;
-            if let Some(publicacion) = self.publicaciones.get_mut(index as usize){
-                publicacion.stock.checked_sub(cantidad).ok_or(ErroresContrato::ErrorComun)?;
-                Ok(())
-            }else{todo!("error: no habia publicacion en el indice")}
+            //let index = id_pub.checked_sub(1).ok_or(ErroresContrato::ErrorComun)?;
+            let publicacion = self.publicaciones.get(id_pub).ok_or(ErroresContrato::PublicacionNoExiste)?;
+            publicacion.stock.checked_sub(cantidad).ok_or(ErroresContrato::StockPublicacionInsuficiente)?;
+            self.publicaciones.set(id_pub, &publicacion);
+            Ok(())
         }
 
         /// Recibe un ID de una publicacion y devuelve su stock
         fn get_precio_unitario(&self, id_pub:u32) -> Result<Balance,ErroresContrato>{
-            if let Some(publicacion) = self.publicaciones.iter().find(|p|p.id == id_pub){
+            if let Some(publicacion) = self.publicaciones.get(id_pub){
                 Ok(publicacion.precio_unitario)
             }else{
-                todo!("error: no encontrar la publicacion con el id provisto")
+                Err(ErroresContrato::PublicacionNoExiste)
             }
         }
 
