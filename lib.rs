@@ -49,7 +49,7 @@ mod contract {
     #[ink::scale_derive(Encode, Decode, TypeInfo)]
     pub enum ErroresApp {
         ErrorComun,
-        ErrorInk(ink_env::Error)
+        //ErrorInk(ink_env::Error)
     }
 
     ///Estructura principal del contrato
@@ -74,7 +74,7 @@ mod contract {
         ///Devuelve el usuario segun el AccountId provisto
         fn get_user(&mut self, id:&AccountId) -> Result<Usuario,ErroresApp>{
             if let Some(usuario) = self.users.try_get(id){
-                Ok(usuario?)
+                usuario
             }else{todo!("error: no hay usuario registrado con el AccountId provisto")}
         }
 
@@ -85,7 +85,7 @@ mod contract {
             mail: String,
         ) -> Result<(), ErroresApp> {
             let id = self.env().caller();
-            return _registrar_usuario(id, nombre, mail)
+            return self._registrar_usuario(id, nombre, mail)
         }
 
         fn _registrar_usuario(
@@ -122,7 +122,7 @@ mod contract {
             precio: Balance,            
         ) -> Result<(),ErroresApp> {
             let id = self.publicaciones.len().checked_add(1).ok_or(ErroresApp::ErrorComun)? as u32;
-            let usuario = self.get_user(id_usuario)?;
+            let usuario = self.get_user(&id_usuario)?;
             if usuario.has_role(VENDEDOR){
                 if let Some(index) = id_producto.checked_sub(1){
                     self.descontar_stock_producto(id_producto, stock)?;
@@ -211,7 +211,7 @@ mod contract {
             let vendedor = self.get_user(&id_vendedor)?;
             //let stock = self.get_stock_publicacion(id_pub)?;
             let precio_producto = self.get_precio_unitario(id_pub)?;
-            let precio_total = precio_producto.mult(cantidad);
+            let precio_total = precio_producto*(cantidad as u128);
             if comprador.has_role(COMPRADOR) && vendedor.has_role(VENDEDOR){
                 if cantidad !=0{
                     self.descontar_stock_publicacion(id_pub, cantidad)?;
