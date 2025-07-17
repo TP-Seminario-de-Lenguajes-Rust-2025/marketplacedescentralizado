@@ -202,7 +202,10 @@ mod contrato {
 
         fn descontar_stock(&mut self, cantidad_a_descontar: u32) -> Result<(), ErroresContrato> {
             self.chequear_stock_disponible(cantidad_a_descontar)?;
-            let nueva_cantidad = self.get_cantidad();
+            let nueva_cantidad = self
+                .get_cantidad()
+                .checked_sub(cantidad_a_descontar)
+                .ok_or(ErroresContrato::MaximoAlcanzado)?;
             self.set_cantidad(nueva_cantidad);
             Ok(())
         }
