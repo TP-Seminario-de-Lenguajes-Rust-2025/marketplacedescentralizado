@@ -4,7 +4,7 @@
 // - Agregar la logica de las validaciones de cantidades.
 //   Se debe controlar que las cantidades solicitadas no superen
 //   los stocks en PUBLICACION y en PRODUCTO.
-// - Agregar servicio ver_productos_publicados
+// - Agregar servicio para modificar roles de usuario.
 //
 
 #[ink::contract]
@@ -119,7 +119,7 @@ mod contrato {
         fn _agregar_producto(
             &mut self,
             nombre: String,
-            categoria: Categoria,
+            categoria: String,
             cantidad: u32,
             precio: Balance,
             descripcion: String,
@@ -189,7 +189,9 @@ mod contrato {
 
         fn _listar_categorias(&self) -> Vec<Categoria>;
 
-        fn get_categoria_by_name(&self, nombre: &String) -> Result<u32, ErroresContrato>;
+        fn get_categoria_by_name(&self, nombre: &String) -> Result<Categoria, ErroresContrato>;
+
+        fn clean_cat_name(&self, nombre: &String) -> String;
     }
 
     impl Producto {
@@ -261,20 +263,22 @@ mod contrato {
         fn _agregar_producto(
             &mut self,
             nombre: String,
-            categoria: Categoria,
+            nombre_categoria: String,
             cantidad: u32,
             precio: Balance,
             descripcion: String,
         ) -> Result<String, ErroresContrato> {
+            // Recupero la categoria del producto
+            let cate = self.get_categoria_by_name(&nombre_categoria)?;
+
             // Chequeo si el producto no existe
-            if self.get_producto_by_name(&nombre, &categoria).is_ok() {
+            if self.get_producto_by_name(&nombre, &cate).is_ok() {
                 return Err(ErroresContrato::ProductoYaExistente);
             }
             // Agregar producto
             let id = self.productos.len();
 
-            let nuevo_producto =
-                Producto::new(id, nombre, categoria, cantidad, precio, descripcion);
+            let nuevo_producto = Producto::new(id, nombre, cate, cantidad, precio, descripcion);
 
             self.productos.push(&nuevo_producto);
             Ok(String::from("El producto fue registrado correctamente"))
@@ -527,7 +531,7 @@ mod contrato {
 
             // Agregar categoria
             let id = self.categorias.len();
-            let nueva_categoria = Categoria::new(id, nombre, descripcion);
+            let nueva_categoria = Categoria::new(id, self.clean_cat_name(&nombre), descripcion);
             self.categorias.push(&nueva_categoria);
 
             Ok(String::from("La categoria fue registrada correctamente"))
@@ -543,15 +547,20 @@ mod contrato {
             resultado
         }
 
-        fn get_categoria_by_name(&self, nombre: &String) -> Result<u32, ErroresContrato> {
+        fn get_categoria_by_name(&self, nombre: &String) -> Result<Categoria, ErroresContrato> {
+            let nombre_limpio = self.clean_cat_name(nombre);
             for i in 0..self.categorias.len() {
                 if let Some(categoria) = self.categorias.get(i) {
-                    if categoria.nombre == *nombre {
-                        return Ok(categoria.id);
+                    if categoria.nombre == nombre_limpio {
+                        return Ok(categoria);
                     }
                 }
             }
             Err(ErroresContrato::CategoriaInexistente)
+        }
+
+        fn clean_cat_name(&self, nombre: &String) -> String {
+            String::from(nombre.to_lowercase().trim())
         }
     }
 
@@ -617,7 +626,7 @@ mod contrato {
         pub fn registrar_producto(
             &mut self,
             nombre: String,
-            categoria: Categoria,
+            categoria: String,
             cantidad: u32,
             precio: Balance,
             descripcion: String,
@@ -782,7 +791,7 @@ mod contrato {
         pub fn listar_productos(&self) -> Vec<Producto> {
             self._listar_productos()
         }
-        
+
         /// Devuelve una lista de todas las publicaciones en el contrato.
         #[ink(message)]
         pub fn listar_publicaciones(&self) -> Vec<Publicacion> {
