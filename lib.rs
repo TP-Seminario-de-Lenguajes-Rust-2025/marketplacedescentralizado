@@ -31,6 +31,7 @@ mod contrato {
         CategoriaYaExistente,
         CategoriaInexistente,
         SinStockDisponible,
+        CategoriaVacia,
     }
 
     #[derive(Encode, Decode, TypeInfo, Debug, PartialEq)]
@@ -88,7 +89,6 @@ mod contrato {
         nombre: String,
         categoria: Categoria,
         cantidad: u32,
-        precio: Balance,
         descripcion: String,
     }
 
@@ -99,6 +99,7 @@ mod contrato {
         id: u32,
         id_producto: u32,
         id_publicador: AccountId,
+        precio_unitario: Balance,
         cantidad: u32,
         activa: bool,
     }
@@ -126,7 +127,6 @@ mod contrato {
             nombre: String,
             categoria: String,
             cantidad: u32,
-            precio: Balance,
             descripcion: String,
         ) -> Result<String, ErroresContrato>;
 
@@ -182,6 +182,7 @@ mod contrato {
             &mut self,
             id_producto: u32,
             id_publicador: AccountId,
+            precio_unitario: Balance,
             cantidad: u32,
         ) -> Result<String, ErroresContrato>;
 
@@ -200,6 +201,8 @@ mod contrato {
         fn get_categoria_by_name(&self, nombre: &String) -> Result<Categoria, ErroresContrato>;
 
         fn clean_cat_name(&self, nombre: &String) -> String;
+
+        fn es_input_valido(&self, input: &String) -> Result<(), ErroresContrato>;
     }
 
     pub trait ControlStock {
@@ -256,7 +259,6 @@ mod contrato {
             nombre: String,
             categoria: Categoria,
             cantidad: u32,
-            precio: Balance,
             descripcion: String,
         ) -> Self {
             Self {
@@ -264,7 +266,6 @@ mod contrato {
                 nombre,
                 categoria,
                 cantidad,
-                precio,
                 descripcion,
             }
         }
@@ -314,11 +315,18 @@ mod contrato {
     }
 
     impl Publicacion {
-        pub fn new(id: u32, id_producto: u32, id_publicador: AccountId, cantidad: u32) -> Self {
+        pub fn new(
+            id: u32,
+            id_producto: u32,
+            id_publicador: AccountId,
+            precio_unitario: Balance,
+            cantidad: u32,
+        ) -> Self {
             Self {
                 id,
                 id_producto,
                 id_publicador,
+                precio_unitario,
                 cantidad,
                 activa: true,
             }
@@ -341,7 +349,6 @@ mod contrato {
             nombre: String,
             nombre_categoria: String,
             cantidad: u32,
-            precio: Balance,
             descripcion: String,
         ) -> Result<String, ErroresContrato> {
             // Recupero la categoria del producto
@@ -355,7 +362,7 @@ mod contrato {
             // Agregar producto
             let id = self.productos.len();
 
-            let nuevo_producto = Producto::new(id, nombre, cate, cantidad, precio, descripcion);
+            let nuevo_producto = Producto::new(id, nombre, cate, cantidad, descripcion);
 
             self.productos.push(&nuevo_producto);
             Ok(String::from("El producto fue registrado correctamente"))
@@ -501,8 +508,8 @@ mod contrato {
             publicacion.chequear_stock_disponible(cantidad)?;
 
             // Calculo precio total
-            let precio_total = producto
-                .precio
+            let precio_total = publicacion
+                .precio_unitario
                 .checked_mul(cantidad as u128)
                 .ok_or(ErroresContrato::MaximoAlcanzado)?;
 
@@ -592,6 +599,7 @@ mod contrato {
             &mut self,
             id_producto: u32,
             id_publicador: AccountId,
+            precio_unitario: Balance,
             cantidad: u32,
         ) -> Result<String, ErroresContrato> {
             // Recupero datos del producto de la publicacion
@@ -605,7 +613,8 @@ mod contrato {
 
             // Genero nueva publicacion
             let id = self.publicaciones.len();
-            let publicacion = Publicacion::new(id, id_producto, id_publicador, cantidad);
+            let publicacion =
+                Publicacion::new(id, id_producto, id_publicador, precio_unitario, cantidad);
             self.publicaciones.push(&publicacion);
 
             //Descuento el stock del Producto.
@@ -668,6 +677,13 @@ mod contrato {
 
         fn clean_cat_name(&self, nombre: &String) -> String {
             String::from(nombre.to_lowercase().trim())
+        }
+
+        fn es_input_valido(&self, input: &String) -> Result<(), ErroresContrato> {
+            if input.trim().is_empty() {
+                return Err(ErroresContrato::CategoriaVacia);
+            }
+            Ok(())
         }
     }
 
@@ -733,11 +749,10 @@ mod contrato {
             nombre: String,
             categoria: String,
             cantidad: u32,
-            precio: Balance,
             descripcion: String,
         ) -> Result<String, ErroresContrato> {
             self.usuario_existe()?; // Comprobar que el usuario esta registrado en la plataforma
-            return self._agregar_producto(nombre, categoria, cantidad, precio, descripcion);
+            return self._agregar_producto(nombre, categoria, cantidad, descripcion);
         }
 
         /// Registra una nueva categoría de productos en el contrato.
@@ -779,10 +794,16 @@ mod contrato {
         pub fn publicar_producto(
             &mut self,
             id_producto: u32,
+            precio_unitario: Balance,
             cantidad: u32,
         ) -> Result<String, ErroresContrato> {
             self.usuario_con_rol(&self.env().caller(), &Rol::Vendedor)?; // Compruebo que el usuario existe y posee rol de vendedor
-            return self._registrar_publicacion(id_producto, self.env().caller(), cantidad);
+            return self._registrar_publicacion(
+                id_producto,
+                self.env().caller(),
+                precio_unitario,
+                cantidad,
+            );
         }
 
         /// Crea una orden de compra sobre una publicación activa.
@@ -823,7 +844,10 @@ mod contrato {
         /// - `CuentaNoRegistrada` si el caller no está registrado.
         /// - `UsuarioSinRoles` si no tiene el rol correspondiente.
         #[ink(message)]
-        pub fn enviar_producto(&mut self, id_orden: u32) -> Result<String, ErroresContrato> {
+        pub fn marcar_orden_como_enviada(
+            &mut self,
+            id_orden: u32,
+        ) -> Result<String, ErroresContrato> {
             self.usuario_con_rol(&self.env().caller(), &Rol::Vendedor)?; // Compruebo que el usuario existe y posee rol de vendedor
             return self._enviar_orden(id_orden);
         }
@@ -842,7 +866,10 @@ mod contrato {
         /// - `CuentaNoRegistrada` si el caller no está registrado.
         /// - `UsuarioSinRoles` si no tiene el rol correspondiente.
         #[ink(message)]
-        pub fn recibir_producto(&mut self, id_orden: u32) -> Result<String, ErroresContrato> {
+        pub fn marcar_orden_como_recibida(
+            &mut self,
+            id_orden: u32,
+        ) -> Result<String, ErroresContrato> {
             self.usuario_con_rol(&self.env().caller(), &Rol::Comprador)?; // Compruebo que el usuario existe y posee rol de vendedor
             return self._recibir_orden(id_orden);
         }
@@ -861,7 +888,7 @@ mod contrato {
         /// - `CuentaNoRegistrada` si el caller no está registrado.
         /// - `UsuarioSinRoles` si no tiene el rol correspondiente.
         // #[ink(message)]
-        // pub fn cancelar_producto(&mut self, id_orden: u32) -> Result<String, ErroresContrato> {
+        // pub fn marcar_orden_como_cancelada(&mut self, id_orden: u32) -> Result<String, ErroresContrato> {
         //     // Compruebo que el usuario existe y posee rol de vendedor
         //     self.usuario_con_rol(&self.env().caller(), &Rol::Comprador)?;
         //     self._cancelar_orden(id_orden)?;
@@ -911,6 +938,88 @@ mod contrato {
         fn usuario_existe(&self) -> Result<(), ErroresContrato> {
             self.get_usuario_by_id(&self.env().caller())?;
             Ok(())
+        }
+    }
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        use ink::env::test;
+        use ink::primitives::AccountId;
+
+        fn cuentas() -> test::DefaultAccounts<ink::env::DefaultEnvironment> {
+            test::default_accounts::<ink::env::DefaultEnvironment>()
+        }
+
+        fn set_caller(caller: AccountId) {
+            test::set_caller::<ink::env::DefaultEnvironment>(caller);
+        }
+
+        fn instanciar_contrato() -> Contrato {
+            Contrato::new()
+        }
+
+        #[ink::test]
+        fn test_registrar_usuario_exitoso() {
+            let mut contrato = Contrato::new();
+            let cuentas = cuentas();
+            set_caller(cuentas.alice);
+
+            let nombre = "simon".to_string();
+            let mail = "simon@gmail.com".to_string();
+
+            let res = contrato.registrar_usuario(nombre.clone(), mail.clone()).expect("Fallo el registro");
+
+            let usuario = contrato.get_usuario_by_id(&cuentas.alice).expect("Debe existir");
+            assert_eq!(usuario.nombre, nombre);
+            assert_eq!(usuario.mail, mail);
+            assert!(usuario.roles.is_empty());
+        }
+
+        #[ink::test]
+        fn test_registrar_usuario_con_mail_repetido() {
+            let mut contrato = Contrato::new();
+            let cuentas = cuentas();
+
+            // Registro exitoso de Alice
+            set_caller(cuentas.alice);
+            let nombre1 = "simon".to_string();
+            let mail_repetido = "simon@gmail.com".to_string();
+            contrato
+                .registrar_usuario(nombre1, mail_repetido.clone())
+                .expect("El primer registro debe funcionar");
+
+            // Intento registrar otro usuario (Bob) con el mismo mail
+            set_caller(cuentas.bob);
+            let nombre2 = "tadeo".to_string();
+            let resultado = contrato.registrar_usuario(nombre2, mail_repetido);
+
+            assert!(
+                matches!(resultado, Err(ErroresContrato::MailYaExistente)),
+                "Se esperaba un error por mail repetido"
+            );
+        }
+
+        #[ink::test]
+        fn registrar_usuario_ya_existente() {
+            let mut contrato = Contrato::new();
+            let cuentas = cuentas();
+            let nombre = "simon".to_string();
+            let mail = "simon@mail.com".to_string();
+
+            set_caller(cuentas.alice);
+            contrato
+                .registrar_usuario(nombre.clone(), mail.clone())
+                .expect("Registro exitoso");
+
+            // Intento registrar otro usuario con mismo AccountId
+            let res = contrato.registrar_usuario("Otra".into(), "otra@mail.com".into());
+
+            assert!(
+                matches!(res, Err(ErroresContrato::UsuarioYaExistente)),
+                "Se esperaba un usuario repetido"
+            );
+
+            //assert_eq!(res, Err(ErroresContrato::UsuarioYaExistente));
         }
     }
 }
