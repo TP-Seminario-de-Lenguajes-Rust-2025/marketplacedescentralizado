@@ -43,6 +43,7 @@ mod contract {
         IndiceInvalido,
         AlreadyHasRol,
         CantidadEnCarritoMenorAUno,
+        NombreCategoriaVacio,
     }
 
     pub trait GestionProducto {
@@ -131,7 +132,7 @@ mod contract {
 
         fn get_categoria_by_name(&self, nombre: &String) -> Result<u32, ErroresContrato>;
 
-        fn clean_cat_name(&self, nombre: &String) -> String;
+        fn clean_cat_name(&self, nombre: &String) -> Result<String,ErroresContrato>;
     }
 
     pub trait ControlStock {
@@ -729,7 +730,7 @@ mod contract {
 
             // Agregar categoria
             let id = self.categorias.len();
-            let nueva_categoria = Categoria::new(id, self.clean_cat_name(&nombre));
+            let nueva_categoria = Categoria::new(id, self.clean_cat_name(&nombre)?);
             self.categorias.push(&nueva_categoria);
 
             Ok(String::from("la categoria fue registrada correctamente"))
@@ -746,7 +747,7 @@ mod contract {
         }
 
         fn get_categoria_by_name(&self, nombre: &String) -> Result<u32, ErroresContrato> {
-            let nombre_limpio = self.clean_cat_name(nombre);
+            let nombre_limpio = self.clean_cat_name(nombre)?;
             for i in 0..self.categorias.len() {
                 if let Some(categoria) = self.categorias.get(i) {
                     if categoria.nombre == nombre_limpio {
@@ -757,8 +758,11 @@ mod contract {
             Err(ErroresContrato::CategoriaInexistente)
         }
 
-        fn clean_cat_name(&self, nombre: &String) -> String {
-            String::from(nombre.to_lowercase().trim())
+        fn clean_cat_name(&self, nombre: &String) -> Result<String,ErroresContrato> {
+            nombre.to_lowercase().trim().to_string().truncate(100);
+            if !nombre.is_empty(){
+                Ok(nombre.to_owned())
+            }else{Err(ErroresContrato::NombreCategoriaVacio)}
         }
     }
 
@@ -1022,10 +1026,39 @@ mod contract {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::contract::*;
+
+    fn contrato_con_categorias_vacia() -> Sistema{
+        let mut sist = Sistema::new();
+        return sist
+    }
+
+    fn contrato_con_categorias_cargada(){
+
+    }
 
     #[test]
-    fn registra_usuario_correctamente() {
-        let app = Sistema::new();
+    fn test_categoria_agregar_nueva() {
+        
+    }
+
+    #[test]
+    fn test_categoria_agregar_duplicada() {
+        
+    }
+
+    #[test]
+    fn test_categoria_agregar_nombre_similar() {
+        
+    }
+
+    #[test]
+    fn test_categoria_agregar_nombre_unicode() {
+        
+    }
+
+    #[test]
+    fn test_categoria_verificar_creacion_id() {
+        
     }
 }
