@@ -74,7 +74,7 @@ mod contract {
         
         fn get_usuario_by_mail(&self, mail: &str) -> Result<Usuario, ErroresContrato>;
 
-        fn _usuario_con_rol(&self, rol: Rol) -> Result<(), ErroresContrato>;
+        //fn _usuario_con_rol(&self, rol: Rol) -> Result<(), ErroresContrato>;
 
         fn _asignar_rol(&mut self, id:AccountId, rol:Rol) -> Result<String, ErroresContrato>;
     }
@@ -371,6 +371,8 @@ mod contract {
         //     Ok(String::from("La orden fue cancelada correctamente"))
         // }
 
+
+        ///FALTA DOCUMENTAR PARA ROL
         #[ink(message)]
         pub fn asignar_rol(&mut self, rol:Rol) -> Result<String, ErroresContrato>{
             self._asignar_rol(self.env().caller(), rol)
@@ -405,6 +407,18 @@ mod contract {
         #[ink(message)]
         pub fn listar_categorias(&self) -> Vec<Categoria> {
             self._listar_categorias()
+        }
+
+        fn _usuario_con_rol(&self, rol: Rol) -> Result<(), ErroresContrato> {
+            let caller = self.env().caller();
+            let usuario = self
+                .m_usuarios
+                .get(caller)
+                .ok_or(ErroresContrato::CuentaNoRegistrada)?;
+            if usuario.has_role(rol) {
+                return Ok(());
+            }
+            Err(ErroresContrato::RolNoApropiado)
         }
 
     }
@@ -526,17 +540,6 @@ mod contract {
             Ok(String::from("rol agregado correctamente"))
         }
 
-        fn _usuario_con_rol(&self, rol: Rol) -> Result<(), ErroresContrato> {
-            let caller = self.env().caller();
-            let usuario = self
-                .m_usuarios
-                .get(caller)
-                .ok_or(ErroresContrato::CuentaNoRegistrada)?;
-            if usuario.has_role(rol) {
-                return Ok(());
-            }
-            Err(ErroresContrato::RolNoApropiado)
-        }
     }
 
     impl GestionOrden for Sistema{
