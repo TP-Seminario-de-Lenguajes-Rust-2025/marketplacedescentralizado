@@ -248,7 +248,6 @@ mod contract {
         pub fn registrar_categoria(
             &mut self,
             nombre: String,
-            descripcion: String,
         ) -> Result<String, ErroresContrato> {
             // Comprobar que el usuario esta registrado en la plataforma
             self.get_user(&self.env().caller())?;
