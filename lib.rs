@@ -14,13 +14,14 @@ mod contract {
     const VENDEDOR: Rol = Rol::Vendedor;
 
     #[ink::scale_derive(Encode, Decode, TypeInfo)]
-    #[derive(Debug)]
+    #[derive(PartialEq, Debug)]
     pub enum ErroresContrato {
         UsuarioSinRoles,
         UsuarioYaExistente,
         UsuarioNoEsComprador,
         UsuarioYaEsComprador,
         UsuarioYaEsVendedor,
+        UsuarioNoEsVendedor,
         UsuarioNoExiste,
         OrdenNoPendiente,
         OrdenNoEnviada,
@@ -441,7 +442,7 @@ mod contract {
                     return Err(ErroresContrato::ProductoYaExistente);
                 }
             } else {
-                return Err(ErroresContrato::UsuarioNoEsComprador);
+                return Err(ErroresContrato::UsuarioNoEsVendedor);
             }
         }
 
@@ -1022,10 +1023,192 @@ mod contract {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::contract::*;
+    use ink::{env::DefaultEnvironment, primitives::AccountId};
+    use ink_e2e::{account_id, AccountKeyring};
 
-    #[test]
-    fn registra_usuario_correctamente() {
-        let app = Sistema::new();
+    fn setup_sistema() -> Sistema {
+        Sistema::new()
+    }
+
+    fn id_comprador() -> <DefaultEnvironment as ink::env::Environment>::AccountId {
+        account_id(AccountKeyring::Alice)
+    }
+
+    fn id_vendedor() -> <DefaultEnvironment as ink::env::Environment>::AccountId {
+        account_id(AccountKeyring::Bob)
+    }
+
+    fn build_testing_accounts() -> (AccountId, AccountId) {
+        let id_comprador = id_comprador();
+        let id_vendedor = id_vendedor();
+        (id_comprador, id_vendedor)
+    }
+
+    //fn de test de agus olthoff
+
+    fn registrar_comprador(
+        sistema: &mut Sistema,
+        id: <DefaultEnvironment as ink::env::Environment>::AccountId,
+    ) {
+        sistema
+            ._registrar_usuario(id, "Comprador".into(), "comprador@gmail.com".into())
+            .unwrap();
+    }
+    fn registrar_vendedor(
+        sistema: &mut Sistema,
+        id: <DefaultEnvironment as ink::env::Environment>::AccountId,
+    ) {
+        sistema
+            ._registrar_usuario(id, "Vendedor".into(), "vendedor@gmail.com".into())
+            .unwrap();
+        sistema._asignar_rol(id, Rol::Vendedor).unwrap();
+    }
+
+    fn agregar_categoria(sistema: &mut Sistema, nombre: &str) {
+        sistema._registrar_categoria(nombre.into()).unwrap();
+    }
+
+    //_crear_producto
+    //si el producto es exitoso (no duplicado y es vendedor)
+    #[ink::test]
+    fn test_crear_producto_exitoso() {
+        let mut sistema = setup_sistema();
+        let id = id_vendedor();
+
+        registrar_vendedor(&mut sistema, id);
+        agregar_categoria(&mut sistema, "Ropa");
+
+        let res = sistema._crear_producto(id, "Zapatilla".into(), "desc".into(), "Ropa".into(), 10);
+
+        assert!(res.is_ok());
+
+        let productos = sistema._listar_productos();
+        assert_eq!(productos.len(), 1);
+
+        let esperado = Producto::new(0, id, "Zapatilla".into(), "desc".into(), 0, 10);
+        assert!(productos[0].eq(&esperado));
+    }
+
+    //test falla por que el producto esta duplicado
+    #[ink::test]
+    fn test_crear_producto_falla_si_ya_esxiste() {
+        let mut sistema = setup_sistema();
+        let id = id_vendedor();
+
+        registrar_vendedor(&mut sistema, id);
+        agregar_categoria(&mut sistema, "Ropa");
+
+        let res = sistema._crear_producto(id, "Zapatilla".into(), "desc".into(), "Ropa".into(), 10);
+        assert!(res.is_ok());
+
+        let res2 =
+            sistema._crear_producto(id, "Zapatilla".into(), "desc".into(), "Ropa".into(), 10);
+        assert!(res2.is_err());
+        assert_eq!(res2.unwrap_err(), ErroresContrato::ProductoYaExistente);
+    }
+    //test falla por que el usuario no es vendedor
+    #[ink::test]
+    fn test_crear_producto_falla_si_es_comprador() {
+        let mut sistema = setup_sistema();
+        let id = id_comprador();
+
+        registrar_comprador(&mut sistema, id);
+        agregar_categoria(&mut sistema, "Ropa");
+
+        let res = sistema._crear_producto(id, "Zapatilla".into(), "desc".into(), "Ropa".into(), 10);
+        assert!(res.is_err());
+        assert_eq!(res.unwrap_err(), ErroresContrato::UsuarioNoEsVendedor);
+    }
+
+    //producto_existe (caso existente)
+    #[ink::test]
+    fn test_producto_existe() {
+        let mut sistema = setup_sistema();
+        let id = id_vendedor();
+
+        registrar_vendedor(&mut sistema, id);
+        agregar_categoria(&mut sistema, "Ropa");
+
+        let _ = sistema._crear_producto(id, "Zapatilla".into(), "desc".into(), "Ropa".into(), 10);
+
+        // Armamos el producto igual al creado
+        let producto = Producto::new(0, id, "Zapatilla".into(), "desc".into(), 0, 10);
+
+        let existe = sistema.producto_existe(&producto);
+        assert!(existe);
+    }
+    //producto_existe (caso inexistente)
+    #[ink::test]
+    fn test_producto_no_existe() {
+        let sistema = setup_sistema();
+        let id = id_vendedor();
+        let producto = Producto::new(0, id, "Zapatilla".into(), "desc".into(), 0, 10);
+
+        let existe = sistema.producto_existe(&producto);
+        assert!(!existe);
+    }
+    // descontar_stock_producto (caso exitoso)
+    #[ink::test]
+    fn test_descontar_stock_producto_exitoso() {
+        let mut sistema = setup_sistema();
+        let id = id_vendedor();
+
+        registrar_vendedor(&mut sistema, id);
+        agregar_categoria(&mut sistema, "Ropa");
+
+        sistema
+            ._crear_producto(id, "Zapatilla".into(), "desc".into(), "Ropa".into(), 10)
+            .unwrap();
+
+        // descontar 3 unidades
+        let res = sistema.descontar_stock_producto(0, 3);
+        assert!(res.is_ok());
+
+        let productos = sistema._listar_productos();
+        let esperado = Producto::new(0, id, "Zapatilla".into(), "desc".into(), 0, 7);
+        assert!(productos[0].eq(&esperado));
+    }
+    #[ink::test]
+    fn test_descontar_stock_falla_producto_inexistente() {
+        let mut sistema = setup_sistema();
+        let res = sistema.descontar_stock_producto(0, 1);
+        assert!(res.is_err());
+        assert_eq!(res.unwrap_err(), ErroresContrato::ProductoInexistente);
+    }
+    #[ink::test]
+    fn test_descontar_stock_falla_stock_insuficiente() {
+        let mut sistema = setup_sistema();
+        let id = id_vendedor();
+
+        registrar_vendedor(&mut sistema, id);
+        agregar_categoria(&mut sistema, "Ropa");
+
+        sistema
+            ._crear_producto(id, "Zapatilla".into(), "desc".into(), "Ropa".into(), 5)
+            .unwrap();
+
+        // descuento mas stock de lo que tengo
+        let res = sistema.descontar_stock_producto(0, 10);
+        assert!(res.is_err());
+        assert_eq!(res.unwrap_err(), ErroresContrato::StockProductoInsuficiente);
+    }
+    #[ink::test]
+    fn test_listar_productos_con_productos() {
+        let mut sistema = setup_sistema();
+        let id = id_vendedor();
+
+        registrar_vendedor(&mut sistema, id);
+        agregar_categoria(&mut sistema, "Ropa");
+
+        sistema
+            ._crear_producto(id, "Zapatilla".into(), "desc".into(), "Ropa".into(), 10)
+            .unwrap();
+
+        let productos = sistema._listar_productos();
+        assert_eq!(productos.len(), 1);
+
+        let esperado = Producto::new(0, id, "Zapatilla".into(), "desc".into(), 0, 10);
+        assert!(productos[0].eq(&esperado));
     }
 }
