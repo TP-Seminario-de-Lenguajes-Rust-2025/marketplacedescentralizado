@@ -254,7 +254,7 @@ mod contract {
         pub fn registrar_categoria(&mut self, nombre: String) -> Result<String, ErroresContrato> {
             // Comprobar que el usuario esta registrado en la plataforma
             self.get_user(&self.env().caller())?;
-            return self._registrar_categoria(nombre);
+            self._registrar_categoria(nombre)
         }
 
         /// Publica un producto previamente registrado en el contrato, generando una publicación activa.
@@ -432,7 +432,7 @@ mod contract {
             let id = self.productos.len();
             let usuario = self.get_user(&id_vendedor)?;
             if usuario.has_role(VENDEDOR) {
-                let id_cat = self.get_categoria_by_name(categoria);
+                let id_cat = self.get_categoria_by_name(&categoria)?;
                 let producto = Producto::new(id, id_vendedor, nombre, descripcion, id_cat, stock);
                 if !self.producto_existe(&producto) {
                     self.productos.push(&producto);
@@ -722,7 +722,7 @@ mod contract {
     }
 
     impl GestionCategoria for Sistema {
-        fn _registrar_categoria(&mut self, nombre: String) -> Result<u32, ErroresContrato> {
+        fn _registrar_categoria(&mut self, nombre: String) -> Result<String, ErroresContrato> {
             if self.get_categoria_by_name(&nombre).is_ok() {
                 return Err(ErroresContrato::CategoriaYaExistente);
             }
@@ -732,7 +732,7 @@ mod contract {
             let nueva_categoria = Categoria::new(id, self.clean_cat_name(&nombre));
             self.categorias.push(&nueva_categoria);
 
-            Ok(id)
+            Ok(String::from("la categoria fue registrada correctamente"))
         }
 
         fn _listar_categorias(&self) -> Vec<Categoria> {
