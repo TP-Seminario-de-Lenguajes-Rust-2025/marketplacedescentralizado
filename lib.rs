@@ -1207,10 +1207,10 @@ mod tests {
             [VINCENT]
             I dunno, I didn't go into a Burger King.".to_string()
         ),
-            Ok("You know what they call a  Quarter Pounder with Cheese in Paris?
+            Ok("you know what they call a  quarter pounder with cheese in paris?
 
-            [JULES]
-            Th".to_string())
+            [jules]
+            th".to_string())
         );
     }
 
