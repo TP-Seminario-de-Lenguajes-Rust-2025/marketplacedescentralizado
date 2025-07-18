@@ -49,7 +49,7 @@ mod contract {
             id_vendedor: AccountId,
             nombre: String,
             descripcion: String,
-            categoria: u32,
+            categoria: String,
             stock: u32
         ) -> Result<(),ErroresContrato>;
 
@@ -251,7 +251,7 @@ mod contract {
         ) -> Result<String, ErroresContrato> {
             // Comprobar que el usuario esta registrado en la plataforma
             self.get_user(&self.env().caller())?;
-            return self._registrar_categoria(nombre);
+            self._registrar_categoria(nombre)
         }
 
 
@@ -274,7 +274,7 @@ mod contract {
             &mut self,
             nombre: String,
             descripcion: String,
-            categoria: u32,
+            categoria: String,
             stock: u32
         ) -> Result<(),ErroresContrato> {
             let id_vendedor = self.env().caller();
@@ -428,13 +428,14 @@ mod contract {
             id_vendedor: AccountId,
             nombre: String,
             descripcion: String,
-            categoria: u32,
+            categoria: String,
             stock: u32
         ) -> Result<(),ErroresContrato> {
             let id = self.productos.len();
             let usuario = self.get_user(&id_vendedor)?;
             if usuario.has_role(VENDEDOR){
-                let producto = Producto::new(id, id_vendedor, nombre, descripcion, categoria, stock);
+                let id_cat = self.get_categoria_by_name(&categoria)?;
+                let producto = Producto::new(id, id_vendedor, nombre, descripcion, id_cat, stock);
                 if !self.producto_existe(&producto){
                     self.productos.push(&producto);
                     Ok(())
