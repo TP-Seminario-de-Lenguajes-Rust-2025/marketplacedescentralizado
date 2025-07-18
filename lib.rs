@@ -463,11 +463,11 @@ mod contract {
             id: u32,
             cantidad: u32,
         ) -> Result<(), ErroresContrato> {
-            let producto = self
+            let mut producto = self
                 .productos
                 .get(id)
                 .ok_or(ErroresContrato::ProductoInexistente)?; //misma duda que en get_id_vendedor
-            producto
+            producto.stock = producto
                 .stock
                 .checked_sub(cantidad)
                 .ok_or(ErroresContrato::StockProductoInsuficiente)?;
@@ -863,7 +863,7 @@ mod contract {
     ///Estructura de un producto
     #[cfg_attr(feature = "std", derive(ink::storage::traits::StorageLayout))]
     #[ink::scale_derive(Encode, Decode, TypeInfo)]
-    #[derive(PartialEq,Debug)]
+    #[derive(PartialEq, Debug)]
     pub struct Producto {
         id: u32,
         id_vendedor: AccountId,
