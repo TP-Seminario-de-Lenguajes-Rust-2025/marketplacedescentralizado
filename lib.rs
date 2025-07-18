@@ -14,7 +14,7 @@ mod contract {
     const VENDEDOR: Rol = Rol::Vendedor;
 
     #[ink::scale_derive(Encode, Decode, TypeInfo)]
-    #[derive(Debug)]
+    #[derive(Debug,PartialEq)]
     pub enum ErroresContrato {
         UsuarioSinRoles,
         UsuarioYaExistente,
@@ -1033,22 +1033,37 @@ mod tests {
     use crate::contract::*;
 
     fn contrato_con_categorias_vacia() -> Sistema{
-        let mut sist = Sistema::new();
+        let sist = Sistema::new();
         return sist
     }
 
-    fn contrato_con_categorias_cargada(){
-
+    fn contrato_con_categorias_cargada() -> Sistema{
+        let mut sist = Sistema::new();
+        for i in 0..10{
+            sist._registrar_categoria(String::from(format!("categoria {}",i)));
+        }
+        return sist
     }
 
     #[test]
     fn test_categoria_agregar_nueva() {
-        
+        let mut sist = contrato_con_categorias_vacia();
+
+        assert!(sist._listar_categorias().is_empty());
+
+        let result = sist._registrar_categoria("Limpieza".to_string());
+
+        assert_eq!(result, Ok(String::from("la categoria fue registrada correctamente")));
+        assert_eq!(sist._listar_categorias().len(), 1);
     }
 
     #[test]
     fn test_categoria_agregar_duplicada() {
-        
+        let mut sist = contrato_con_categorias_cargada();
+
+        assert!(!sist._listar_categorias().is_empty());
+        let result = sist._registrar_categoria("categoria 1".to_string());
+        assert_eq!(result, Err(ErroresContrato::CategoriaYaExistente));
     }
 
     #[test]
@@ -1068,6 +1083,11 @@ mod tests {
 
     #[test]
     fn test_categoria_verificar_creacion_id() {
+        
+    }
+
+    #[test]
+    fn test_categoria_max_capacidad_alcanzado() {
         
     }
 }
