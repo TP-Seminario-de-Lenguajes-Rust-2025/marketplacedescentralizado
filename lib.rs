@@ -463,11 +463,11 @@ mod contract {
             id: u32,
             cantidad: u32,
         ) -> Result<(), ErroresContrato> {
-            let producto = self
+            let mut producto = self
                 .productos
                 .get(id)
                 .ok_or(ErroresContrato::ProductoInexistente)?; //misma duda que en get_id_vendedor
-            producto
+            producto.stock = producto
                 .stock
                 .checked_sub(cantidad)
                 .ok_or(ErroresContrato::StockProductoInsuficiente)?;
@@ -691,11 +691,11 @@ mod contract {
             cantidad: u32,
         ) -> Result<(), ErroresContrato> {
             //let index = id_pub.checked_sub(1).ok_or(ErroresContrato::ErrorComun)?;
-            let publicacion = self
+            let mut publicacion = self
                 .publicaciones
                 .get(id_pub)
                 .ok_or(ErroresContrato::PublicacionNoExiste)?;
-            publicacion
+            publicacion.stock = publicacion
                 .stock
                 .checked_sub(cantidad)
                 .ok_or(ErroresContrato::StockPublicacionInsuficiente)?;
