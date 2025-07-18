@@ -17,7 +17,7 @@ mod contrato {
         UsuarioSinRoles,
         UsuarioYaConRoles,
         UsuarioYaExistente,
-        CuentaNoRegistrada,
+        UsuarioNoExiste,
         MailYaExistente,
         MailInexistente,
         ProductoInexistente,
@@ -60,7 +60,6 @@ mod contrato {
     #[derive(Encode, Decode, Debug, PartialEq)]
     #[cfg_attr(feature = "std", derive(StorageLayout))]
     #[cfg_attr(feature = "std", derive(TypeInfo))]
-
     pub struct Orden {
         id: u32,
         id_publicacion: u32,
@@ -78,6 +77,7 @@ mod contrato {
     pub struct Usuario {
         nombre: String,
         mail: String,
+        rating: Rating,
         roles: Vec<Rol>,
     }
 
@@ -101,6 +101,13 @@ mod contrato {
         id_publicador: AccountId,
         cantidad: u32,
         activa: bool,
+    }
+
+    #[derive(Encode, Decode, TypeInfo, Debug)]
+    #[cfg_attr(feature = "std", derive(StorageLayout))]
+    struct Rating {
+        calificacion_comprador: (u32, u32), //cant de compras, valor cumulativo de todas las calificaciones
+        calificacion_vendedor: (u32, u32),
     }
 
     #[ink(storage)]
@@ -140,7 +147,6 @@ mod contrato {
             account_id: AccountId,
             nombre: String,
             mail: String,
-            roles: Vec<Rol>,
         ) -> Result<String, ErroresContrato>;
 
         fn _listar_usuarios(&self) -> Vec<Usuario>;
@@ -148,6 +154,10 @@ mod contrato {
         fn get_usuario_by_mail(&self, mail: &str) -> Result<Usuario, ErroresContrato>;
 
         fn get_usuario_by_id(&self, id: &AccountId) -> Result<Usuario, ErroresContrato>;
+
+        fn _asignar_rol(&mut self, id: AccountId, rol: Rol) -> Result<String, ErroresContrato>;
+
+        fn _usuario_con_rol(&self, id: &AccountId, rol: &Rol) -> Result<(), ErroresContrato>;
     }
 
     pub trait GestionOrden {
@@ -160,11 +170,11 @@ mod contrato {
 
         fn _listar_ordenes(&self) -> Vec<Orden>;
 
-        fn _enviar_orden(&mut self, id_orden: u32) -> Result<(), ErroresContrato>;
+        fn _enviar_orden(&mut self, id_orden: u32) -> Result<String, ErroresContrato>;
 
-        fn _recibir_orden(&mut self, id_orden: u32) -> Result<(), ErroresContrato>;
+        fn _recibir_orden(&mut self, id_orden: u32) -> Result<String, ErroresContrato>;
 
-        fn _cancelar_orden(&mut self, id_orden: u32) -> Result<(), ErroresContrato>;
+        fn _cancelar_orden(&mut self, id_orden: u32) -> Result<String, ErroresContrato>;
     }
 
     pub trait GestionPublicacion {
@@ -215,6 +225,28 @@ mod contrato {
                 return Err(ErroresContrato::SinStockDisponible);
             }
             Ok(())
+        }
+    }
+
+    impl Usuario {
+        ///Crea un nuevo Usuario
+        pub fn new(nombre: String, mail: String) -> Usuario {
+            Usuario {
+                nombre,
+                mail,
+                rating: Rating::new(),
+                roles: Vec::new(),
+            }
+        }
+    }
+
+    impl Rating {
+        ///crea un rating
+        fn new() -> Rating {
+            Rating {
+                calificacion_comprador: (0, 0),
+                calificacion_vendedor: (0, 0),
+            }
         }
     }
 
@@ -372,7 +404,6 @@ mod contrato {
             id: AccountId,
             nombre: String,
             mail: String,
-            roles: Vec<Rol>,
         ) -> Result<String, ErroresContrato> {
             // Verifico que el usuario y el mail no existan
             if self.get_usuario_by_id(&id).is_ok() {
@@ -383,11 +414,7 @@ mod contrato {
             };
 
             // Instancio nuevo usuario
-            let usuario = Usuario {
-                mail,
-                nombre: nombre.clone(),
-                roles,
-            };
+            let usuario = Usuario::new(nombre, mail);
 
             // Inserto el usuario tanto en el Mapping como en el Vec
             self.m_usuarios.insert(id, &usuario);
@@ -409,7 +436,7 @@ mod contrato {
         }
 
         ///Devuelve el usuario segun el AccountId provisto
-        fn get_usuario_by_id(&mut self, id: &AccountId) -> Result<Usuario, ErroresContrato> {
+        fn get_usuario_by_id(&self, id: &AccountId) -> Result<Usuario, ErroresContrato> {
             self.m_usuarios
                 .get(id)
                 .ok_or(ErroresContrato::UsuarioNoExiste)
@@ -428,34 +455,27 @@ mod contrato {
             }
             Err(ErroresContrato::MailInexistente)
         }
-        
+
         /// Asigna un rol a un usuario
         fn _asignar_rol(&mut self, id: AccountId, rol: Rol) -> Result<String, ErroresContrato> {
-            let mut usuario = self.get_usuario(&id)?;
-            if self._usuario_con_rol(usuario, rol).is_ok() {
-                return Err(ErroresContrato::UsuarioYaConRoles)
-            }
+            if self._usuario_con_rol(&id, &rol).is_ok() {
+                return Err(ErroresContrato::UsuarioYaConRoles);
+            } // Chequeo que el usuario no posea el rol a agregar
+
+            let mut usuario = self.get_usuario_by_id(&id)?;
             usuario.roles.push(rol);
             self.m_usuarios.insert(id, &usuario);
             Ok(String::from("Rol asignado correctamente!"))
         }
-        }
 
-        /// Verifica si existe un usuario con el AccountId dado
-        fn get_usuario_by_id(&self, id: &AccountId) -> Result<Usuario, ErroresContrato> {
-            self.m_usuarios
-                .get(id)
-                .ok_or(ErroresContrato::CuentaNoRegistrada)
-        }
-
-        fn _usuario_con_rol(&self, usuario: Usuario, rol: Rol) -> Result<(), ErroresContrato> {
-            if usuario.roles.contains(&rol) {
+        /// Chequea si un usuario posee un rol
+        fn _usuario_con_rol(&self, id: &AccountId, rol: &Rol) -> Result<(), ErroresContrato> {
+            let usuario = self.get_usuario_by_id(&id)?;
+            if usuario.roles.contains(rol) {
                 return Ok(());
             }
             Err(ErroresContrato::UsuarioSinRoles)
         }
-
-
     }
 
     impl GestionOrden for Contrato {
@@ -518,7 +538,7 @@ mod contrato {
             resultado
         }
 
-        fn _enviar_orden(&mut self, id_orden: u32) -> Result<(), ErroresContrato> {
+        fn _enviar_orden(&mut self, id_orden: u32) -> Result<String, ErroresContrato> {
             let mut orden = self
                 .ordenes
                 .get(id_orden)
@@ -528,13 +548,13 @@ mod contrato {
                 EstadoOrden::Pendiente => {
                     orden.status = EstadoOrden::Enviada;
                     self.ordenes.set(id_orden, &orden);
-                    Ok(())
+                    Ok(String::from("La orden fue enviada correctamente"))
                 }
                 _ => Err(ErroresContrato::OrdenNoPendiente),
             }
         }
 
-        fn _recibir_orden(&mut self, id_orden: u32) -> Result<(), ErroresContrato> {
+        fn _recibir_orden(&mut self, id_orden: u32) -> Result<String, ErroresContrato> {
             let mut orden = self
                 .ordenes
                 .get(id_orden)
@@ -544,13 +564,13 @@ mod contrato {
                 EstadoOrden::Enviada => {
                     orden.status = EstadoOrden::Recibida;
                     self.ordenes.set(id_orden, &orden);
-                    Ok(())
+                    Ok(String::from("La orden fue recibida correctamente"))
                 }
                 _ => Err(ErroresContrato::OrdenNoEnviada),
             }
         }
 
-        fn _cancelar_orden(&mut self, id_orden: u32) -> Result<(), ErroresContrato> {
+        fn _cancelar_orden(&mut self, id_orden: u32) -> Result<String, ErroresContrato> {
             let mut orden = self
                 .ordenes
                 .get(id_orden)
@@ -561,7 +581,7 @@ mod contrato {
                 _ => {
                     orden.status = EstadoOrden::Recibida;
                     self.ordenes.set(id_orden, &orden);
-                    Ok(())
+                    Ok(String::from("La orden fue cancelada correctamente"))
                 }
             }
         }
@@ -591,7 +611,6 @@ mod contrato {
             //Descuento el stock del Producto.
             producto.descontar_stock(cantidad)?;
             self.productos.set(id_producto, &producto);
-
             Ok(String::from("Publicacion registrada correctamente!"))
         }
 
@@ -679,7 +698,6 @@ mod contrato {
         /// # Parámetros
         /// - `nombre`: Nombre del usuario.
         /// - `mail`: Correo electrónico del usuario.
-        /// - `roles`: Lista de roles asignados al usuario (Comprador, Vendedor).
         ///
         /// # Errores
         /// - `UsuarioYaExistente` si el usuario ya está registrado.
@@ -689,9 +707,8 @@ mod contrato {
             &mut self,
             nombre: String,
             mail: String,
-            roles: Vec<Rol>,
         ) -> Result<String, ErroresContrato> {
-            return self._registrar_usuario(self.env().caller(), nombre, mail, roles);
+            return self._registrar_usuario(self.env().caller(), nombre, mail);
         }
 
         /// Registra un nuevo producto en el contrato, asignándolo al AccountId que lo publica.
@@ -711,7 +728,7 @@ mod contrato {
         /// - `ProductoYaExistente` si ya existe un producto con ese nombre y categoría.
         /// - `MaximoAlcanzado` si no se puede generar un nuevo ID.
         #[ink(message)]
-        pub fn registrar_producto(
+        pub fn crear_producto(
             &mut self,
             nombre: String,
             categoria: String,
@@ -719,8 +736,7 @@ mod contrato {
             precio: Balance,
             descripcion: String,
         ) -> Result<String, ErroresContrato> {
-            // Comprobar que el usuario esta registrado en la plataforma
-            self._usuario_existe()?;
+            self.usuario_existe()?; // Comprobar que el usuario esta registrado en la plataforma
             return self._agregar_producto(nombre, categoria, cantidad, precio, descripcion);
         }
 
@@ -737,13 +753,12 @@ mod contrato {
         /// - `CuentaNoRegistrada`: Si el usuario que intenta registrar la categoría no está registrado.
         /// - `CategoriaYaExistente`: Si la categoria ya existe actualmente.
         #[ink(message)]
-        pub fn registrar_categoria(
+        pub fn crear_categoria(
             &mut self,
             nombre: String,
             descripcion: String,
         ) -> Result<String, ErroresContrato> {
-            // Comprobar que el usuario esta registrado en la plataforma
-            self._usuario_existe()?;
+            self.usuario_existe()?; // Comprobar que el usuario esta registrado en la plataforma
             return self._registrar_categoria(nombre, descripcion);
         }
 
@@ -766,14 +781,8 @@ mod contrato {
             id_producto: u32,
             cantidad: u32,
         ) -> Result<String, ErroresContrato> {
-            // Compruebo que el usuario existe y posee rol de vendedor
-            self._usuario_con_rol(Rol::Vendedor)?;
-
-            //Registro publicacion
-            let id_comprador = self.env().caller();
-            self._registrar_publicacion(id_producto, id_comprador, cantidad)?;
-
-            Ok(String::from("Publicacion creada correctamente!"))
+            self.usuario_con_rol(&self.env().caller(), &Rol::Vendedor)?; // Compruebo que el usuario existe y posee rol de vendedor
+            return self._registrar_publicacion(id_producto, self.env().caller(), cantidad);
         }
 
         /// Crea una orden de compra sobre una publicación activa.
@@ -791,18 +800,13 @@ mod contrato {
         /// - `PublicacionNoExiste` si no existe la publicación.
         /// - `ProductoInexistente` si el producto vinculado a la publicación no existe.
         #[ink(message)]
-        pub fn comprar_producto(
+        pub fn crear_orden(
             &mut self,
             id_publicacion: u32,
             cantidad: u32,
         ) -> Result<String, ErroresContrato> {
-            // Compruebo que el usuario existe y posee rol de comprador
-            self._usuario_con_rol(Rol::Comprador)?;
-
-            //Registro orden de compra
-            let id_comprador = self.env().caller();
-            self._registrar_orden(id_publicacion, id_comprador, cantidad)?;
-            Ok(String::from("Orden emitida correctamente!"))
+            self.usuario_con_rol(&self.env().caller(), &Rol::Comprador)?; // Compruebo que el usuario existe y posee rol de comprador
+            return self._registrar_orden(id_publicacion, self.env().caller(), cantidad);
         }
 
         /// Marca una orden como `Enviada`.
@@ -820,10 +824,8 @@ mod contrato {
         /// - `UsuarioSinRoles` si no tiene el rol correspondiente.
         #[ink(message)]
         pub fn enviar_producto(&mut self, id_orden: u32) -> Result<String, ErroresContrato> {
-            // Compruebo que el usuario existe y posee rol de vendedor
-            self._usuario_con_rol(Rol::Vendedor)?;
-            self._enviar_orden(id_orden)?;
-            Ok(String::from("La orden fue cancelada correctamente"))
+            self.usuario_con_rol(&self.env().caller(), &Rol::Vendedor)?; // Compruebo que el usuario existe y posee rol de vendedor
+            return self._enviar_orden(id_orden);
         }
 
         /// Marca una orden como `Recibida`.
@@ -841,10 +843,8 @@ mod contrato {
         /// - `UsuarioSinRoles` si no tiene el rol correspondiente.
         #[ink(message)]
         pub fn recibir_producto(&mut self, id_orden: u32) -> Result<String, ErroresContrato> {
-            // Compruebo que el usuario existe y posee rol de vendedor
-            self._usuario_con_rol(Rol::Comprador)?;
-            self._recibir_orden(id_orden)?;
-            Ok(String::from("La orden fue cancelada correctamente"))
+            self.usuario_con_rol(&self.env().caller(), &Rol::Comprador)?; // Compruebo que el usuario existe y posee rol de vendedor
+            return self._recibir_orden(id_orden);
         }
 
         /// Cancela una orden pendiente o aún no enviada.
@@ -860,13 +860,13 @@ mod contrato {
         /// - `OrdenYaCancelada` si ya fue cancelada previamente.
         /// - `CuentaNoRegistrada` si el caller no está registrado.
         /// - `UsuarioSinRoles` si no tiene el rol correspondiente.
-        #[ink(message)]
-        pub fn cancelar_producto(&mut self, id_orden: u32) -> Result<String, ErroresContrato> {
-            // Compruebo que el usuario existe y posee rol de vendedor
-            self._usuario_con_rol(Rol::Comprador)?;
-            self._cancelar_orden(id_orden)?;
-            Ok(String::from("La orden fue cancelada correctamente"))
-        }
+        // #[ink(message)]
+        // pub fn cancelar_producto(&mut self, id_orden: u32) -> Result<String, ErroresContrato> {
+        //     // Compruebo que el usuario existe y posee rol de vendedor
+        //     self.usuario_con_rol(&self.env().caller(), &Rol::Comprador)?;
+        //     self._cancelar_orden(id_orden)?;
+        //     Ok(String::from("La orden fue cancelada correctamente"))
+        // }
 
         /// Devuelve una lista de todos los usuarios registrados en el contrato.
         #[ink(message)]
@@ -901,7 +901,16 @@ mod contrato {
         /// Asignar un rol de usuario a un usuario dado
         #[ink(message)]
         pub fn asignar_rol(&mut self, rol: Rol) -> Result<String, ErroresContrato> {
-            self._asignar_rol(self.env().caller(), rol)  
+            self._asignar_rol(self.env().caller(), rol)
+        }
+
+        fn usuario_con_rol(&self, id: &AccountId, rol: &Rol) -> Result<(), ErroresContrato> {
+            self._usuario_con_rol(id, rol)
+        }
+
+        fn usuario_existe(&self) -> Result<(), ErroresContrato> {
+            self.get_usuario_by_id(&self.env().caller())?;
+            Ok(())
         }
     }
 }
