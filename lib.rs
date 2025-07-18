@@ -127,28 +127,28 @@ mod contract {
         fn clean_cat_name(&self, nombre: &String) -> String;
     }
 
-    pub trait ControlStock {
-        fn get_cantidad(&self) -> u32;
+    // pub trait ControlStock {
+    //     fn get_cantidad(&self) -> u32;
 
-        fn set_cantidad(&mut self, nueva: u32);
+    //     fn set_cantidad(&mut self, nueva: u32);
 
-        fn descontar_stock(&mut self, cantidad_a_descontar: u32) -> Result<(), ErroresContrato> {
-            //self.chequear_stock_disponible(cantidad_a_descontar)?;
-            let nueva_cantidad = self.get_cantidad().checked_sub(cantidad_a_descontar).ok_or(ErroresContrato::StockInsuficiente)?;
-            self.set_cantidad(nueva_cantidad);
-            Ok(())
-        }
+    //     fn descontar_stock(&mut self, cantidad_a_descontar: u32) -> Result<(), ErroresContrato> {
+    //         //self.chequear_stock_disponible(cantidad_a_descontar)?;
+    //         let nueva_cantidad = self.get_cantidad().checked_sub(cantidad_a_descontar).ok_or(ErroresContrato::StockInsuficiente)?;
+    //         self.set_cantidad(nueva_cantidad);
+    //         Ok(())
+    //     }
 
-        // fn chequear_stock_disponible(
-        //     &self,
-        //     cantidad_a_descontar: u32,
-        // ) -> Result<(), ErroresContrato> {
-        //     if self.get_cantidad() < cantidad_a_descontar {
-        //         return Err(ErroresContrato::SinStockDisponible);
-        //     }
-        //     Ok(())
-        // }
-    }
+    //     // fn chequear_stock_disponible(
+    //     //     &self,
+    //     //     cantidad_a_descontar: u32,
+    //     // ) -> Result<(), ErroresContrato> {
+    //     //     if self.get_cantidad() < cantidad_a_descontar {
+    //     //         return Err(ErroresContrato::SinStockDisponible);
+    //     //     }
+    //     //     Ok(())
+    //     // }
+    // }
 
 
 
@@ -881,15 +881,15 @@ mod contract {
         }
     }
 
-    impl ControlStock for Producto {
-        fn get_cantidad(&self) -> u32 {
-            self.stock
-        }
+    // impl ControlStock for Producto {
+    //     fn get_cantidad(&self) -> u32 {
+    //         self.stock
+    //     }
 
-        fn set_cantidad(&mut self, nueva: u32) {
-            self.stock = nueva;
-        }
-    }
+    //     fn set_cantidad(&mut self, nueva: u32) {
+    //         self.stock = nueva;
+    //     }
+    // }
 
     ///LOGICA DE PUBLICACION
 
@@ -928,15 +928,15 @@ mod contract {
         }
     }
 
-    impl ControlStock for Publicacion {
-        fn get_cantidad(&self) -> u32 {
-            self.stock
-        }
+    // impl ControlStock for Publicacion {
+    //     fn get_cantidad(&self) -> u32 {
+    //         self.stock
+    //     }
 
-        fn set_cantidad(&mut self, nueva: u32) {
-            self.stock = nueva;
-        }
-    }
+    //     fn set_cantidad(&mut self, nueva: u32) {
+    //         self.stock = nueva;
+    //     }
+    // }
 
     ///Estructuras y logica de Orden
     ///Posibles estados de una Ordem
