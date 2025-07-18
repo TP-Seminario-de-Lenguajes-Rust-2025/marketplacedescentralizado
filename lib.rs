@@ -10,8 +10,8 @@ mod contract {
     use scale_info::TypeInfo;
     //use scale_info::prelude::vec::Vec;
 
-    const COMPRADOR: Rol = Rol::Comprador;
-    const VENDEDOR: Rol = Rol::Vendedor;
+    pub const COMPRADOR: Rol = Rol::Comprador;
+    pub const VENDEDOR: Rol = Rol::Vendedor;
 
     #[ink::scale_derive(Encode, Decode, TypeInfo)]
     #[derive(Debug)]
@@ -98,6 +98,7 @@ mod contract {
         fn _enviar_orden(&mut self, id_orden: u32) -> Result<(), ErroresContrato>;
 
         fn _recibir_orden(&mut self, id_orden: u32) -> Result<(), ErroresContrato>;
+
 
         //fn _cancelar_orden(&mut self, id_orden: u32) -> Result<(), ErroresContrato>;
     }
@@ -636,6 +637,7 @@ mod contract {
             }
         }
 
+
         // fn _cancelar_orden(&mut self, id_orden: u32) -> Result<(), ErroresContrato> {
         //     let mut orden = self
         //         .ordenes
@@ -965,6 +967,7 @@ mod contract {
 
     ///Estructuras y logica de Orden
     ///Posibles estados de una Ordem
+    #[derive(Debug, PartialEq, Eq, Copy, Clone)]
     #[cfg_attr(feature = "std", derive(ink::storage::traits::StorageLayout))]
     #[ink::scale_derive(Encode, Decode, TypeInfo)]
     pub enum EstadoOrden {
@@ -1012,7 +1015,13 @@ mod contract {
                 cal_comprador: None,
             }
         }
+        pub fn get_cantidad(&self)->u32{
+            self.cantidad
+        }
 
+        pub fn get_status(&self)->EstadoOrden{
+            self.status
+        }
         //pub fn cambiar_estado
         //fn set_enviada() //solamente puede ser modificada por el vendedor
         //fn set_recibida() //solamente puede ser modificada por el comprador
@@ -1022,10 +1031,169 @@ mod contract {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::contract::*;
+    use ink::{env::DefaultEnvironment, primitives::AccountId};
+    use ink_e2e::{account_id, AccountKeyring};
+
+    fn setup_sistema() -> Sistema {
+        Sistema::new()
+    }
+
+    fn id_comprador() -> <DefaultEnvironment as ink::env::Environment>::AccountId {
+        account_id(AccountKeyring::Alice)
+    }
+
+    fn id_vendedor() -> <DefaultEnvironment as ink::env::Environment>::AccountId {
+        account_id(AccountKeyring::Bob)
+    }
+
+    fn build_testing_accounts() -> (AccountId, AccountId) {
+        let id_comprador = id_comprador();
+        let id_vendedor = id_vendedor();
+        (id_comprador, id_vendedor)
+    }
+
 
     #[test]
     fn registra_usuario_correctamente() {
         let app = Sistema::new();
     }
+
+    ///Tests gestion orden
+    #[ink::test]
+    fn test_crear_orden_con_exito() {
+        let mut contrato = setup_sistema();
+        let (id_comprador, id_vendedor) = build_testing_accounts();
+
+        contrato._registrar_usuario(id_comprador, "Juan comprador".to_string(), "comprador@gmail.com".to_string()).unwrap();
+        contrato._asignar_rol(id_comprador, COMPRADOR).unwrap();
+
+        contrato._registrar_usuario(id_vendedor, "Usuario vendedor".to_string(), "vendedor@gmail.com".to_string()).unwrap();
+        contrato._asignar_rol(id_vendedor, VENDEDOR).unwrap();
+
+        contrato._registrar_categoria("Libros".to_string()).unwrap();
+        contrato._crear_producto(id_vendedor, "Rust Book".to_string(), "Desc libro".to_string(), 0, 10).unwrap();
+        contrato._crear_publicacion(0, id_vendedor, 10, 100).unwrap();
+
+        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(id_comprador);//setea el caller en Comprador
+
+        let result = contrato.crear_orden(0, 2);
+        assert!(result.is_ok(), "Error al crear la orden");
+
+        let ordenes = contrato.listar_ordenes();
+        assert_eq!(ordenes.len(), 1);
+        assert_eq!(ordenes[0].get_cantidad(), 2);
+        assert_eq!(ordenes[0].get_status(), EstadoOrden::Pendiente);
+    }
+
+    #[ink::test]
+    fn test_crear_orden_con_cantidad_cero_fallido() {
+        let mut contrato = setup_sistema();
+        let (comprador, vendedor) = build_testing_accounts();
+
+        contrato._registrar_usuario(vendedor, "Santiago vendedor".to_string(), "ST96@Gmail.com".to_string()).unwrap();
+        contrato._asignar_rol(vendedor, VENDEDOR).unwrap();
+
+        contrato._registrar_usuario(comprador, "Juan comprador".to_string(), "JT11@Gmail.com".to_string()).unwrap();
+        contrato._asignar_rol(comprador, COMPRADOR).unwrap();
+
+        contrato._registrar_categoria("Electronica".to_string()).unwrap();
+        contrato._crear_producto(vendedor, "Auriculares".to_string(), "BT".to_string(), 0, 5).unwrap();
+        contrato._crear_publicacion(0, vendedor, 5, 250).unwrap();
+
+        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(comprador);
+
+        let res = contrato.crear_orden(0, 0);
+        assert!(matches!(res, Err(ErroresContrato::CantidadEnCarritoMenorAUno)));
+    }
+
+    #[ink::test]
+    fn test_crear_orden_sin_rol_comprador_fallido() {
+        let mut contrato = setup_sistema();
+        let (no_comprador,vendedor) = build_testing_accounts();
+
+        contrato._registrar_usuario(vendedor,"Juan Vendedor".to_string(),"JT11@Gmail.com".to_string()).unwrap();
+        contrato._asignar_rol(vendedor, VENDEDOR).unwrap();
+
+        contrato._registrar_usuario(no_comprador, "Santi No comprador".to_string(), "ST96@Gmail.com".to_string()).unwrap();
+
+        contrato._registrar_categoria("Una cat".to_string()).unwrap();
+        contrato._crear_producto(vendedor,"Nombre CAt".to_string(),"Aux".to_string(),0,3).unwrap();
+        contrato._crear_publicacion(0, vendedor, 3, 600).unwrap();
+
+        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(no_comprador);
+
+        let res = contrato.crear_orden(0, 1);
+        assert!(matches!(res, Err(ErroresContrato::RolNoApropiado)));
+    }
+
+    #[ink::test]
+    fn test_enviar_orden_pendiente_exito() {
+        let mut contrato = setup_sistema();
+        let (comprador, vendedor) = build_testing_accounts();
+
+        // registrar usuarios y roles
+        contrato._registrar_usuario(vendedor, "Juan Vendedor".to_string(), "vendedor@mail.com".to_string()).unwrap();
+        contrato._asignar_rol(vendedor,VENDEDOR).unwrap();
+        contrato._registrar_usuario(comprador,"Santi Comprador".to_string(),"comprador@mail.com".to_string()).unwrap();
+        contrato._asignar_rol(comprador,COMPRADOR).unwrap();
+
+        // Creo categoría, producto y publicación
+        contrato._registrar_categoria("Juegos".to_string()).unwrap();
+        contrato._crear_producto(vendedor,"PS5".to_string(),"Sony".to_string(), 0, 3).unwrap();
+        contrato._crear_publicacion(0, vendedor, 3, 600).unwrap();
+
+        // Creo orden como comprador
+        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(comprador);
+        contrato.crear_orden(0, 2).unwrap();
+
+        // Envio orden como vendedor
+        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(vendedor);
+        let res = contrato.enviar_producto(0);
+
+        assert!(res.is_ok(), "Fallo al enviar la orden");
+        let ordenes = contrato.listar_ordenes();
+        assert_eq!(ordenes[0].get_status(), EstadoOrden::Enviada);
+    }
+
+    #[ink::test]
+    fn test_contrato_orden_pendiente_exitoso() {
+        let mut contrato = setup_sistema();
+        let (comprador, vendedor) = build_testing_accounts();
+
+        // Setea la cuenta del contrato como callee en el entorno de test
+        let contrato_account = ink::env::test::callee::<ink::env::DefaultEnvironment>();
+        ink::env::test::set_callee::<ink::env::DefaultEnvironment>(contrato_account);
+
+        contrato._registrar_usuario(vendedor, "Santiago".to_string(), "santi@mail.com".to_string()).unwrap();
+        contrato._asignar_rol(vendedor, VENDEDOR).unwrap();
+
+        contrato._registrar_usuario(comprador, "Juan".to_string(), "juan@mail.com".to_string()).unwrap();
+        contrato._asignar_rol(comprador, COMPRADOR).unwrap();
+
+        contrato._registrar_categoria("Libros".to_string()).unwrap();
+        contrato._crear_producto(vendedor, "Rust".to_string(), "Desc".to_string(), 0, 10).unwrap();
+        contrato._crear_publicacion(0, vendedor, 10, 100).unwrap();
+
+        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(comprador);
+
+        assert!(contrato.crear_orden(0, 1).is_ok());
+    }
+
+    #[ink::test]
+    fn enviar_orden_inexistente_falla() {
+        let mut contrato = setup_sistema();
+        let vendedor = id_vendedor();
+
+        contrato._registrar_usuario(vendedor, "Ven".into(), "v@mail.com".to_string()).unwrap();
+        contrato._asignar_rol(vendedor, VENDEDOR).unwrap();
+
+        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(vendedor);
+
+        // No hay orden 99
+        let res = contrato.enviar_producto(99);
+        assert!(matches!(res, Err(ErroresContrato::OrdenInexistente)));
+    }
+
+    
 }
