@@ -1,9 +1,5 @@
 #![cfg_attr(not(feature = "std"), no_std, no_main)]
 
-//TODO:
-// - Agregar la logica de las validaciones de cantidades.
-//   Se debe controlar que las cantidades solicitadas no superen
-//   los stocks en PUBLICACION y en PRODUCTO.
 // - Agregar servicio para modificar roles de usuario.
 //
 
@@ -19,6 +15,7 @@ mod contrato {
     #[derive(Encode, Decode, TypeInfo, Debug)]
     pub enum ErroresContrato {
         UsuarioSinRoles,
+        UsuarioYaConRoles,
         UsuarioYaExistente,
         CuentaNoRegistrada,
         MailYaExistente,
@@ -411,6 +408,13 @@ mod contrato {
             resultado
         }
 
+        ///Devuelve el usuario segun el AccountId provisto
+        fn get_usuario_by_id(&mut self, id: &AccountId) -> Result<Usuario, ErroresContrato> {
+            self.m_usuarios
+                .get(id)
+                .ok_or(ErroresContrato::UsuarioNoExiste)
+        }
+
         /// Verifica si ya existe un usuario con el mail dado
         fn get_usuario_by_mail(&self, mail: &str) -> Result<Usuario, ErroresContrato> {
             for i in 0..self.v_usuarios.len() {
@@ -424,6 +428,18 @@ mod contrato {
             }
             Err(ErroresContrato::MailInexistente)
         }
+        
+        /// Asigna un rol a un usuario
+        fn _asignar_rol(&mut self, id: AccountId, rol: Rol) -> Result<String, ErroresContrato> {
+            let mut usuario = self.get_usuario(&id)?;
+            if self._usuario_con_rol(usuario, rol).is_ok() {
+                return Err(ErroresContrato::UsuarioYaConRoles)
+            }
+            usuario.roles.push(rol);
+            self.m_usuarios.insert(id, &usuario);
+            Ok(String::from("Rol asignado correctamente!"))
+        }
+        }
 
         /// Verifica si existe un usuario con el AccountId dado
         fn get_usuario_by_id(&self, id: &AccountId) -> Result<Usuario, ErroresContrato> {
@@ -431,6 +447,15 @@ mod contrato {
                 .get(id)
                 .ok_or(ErroresContrato::CuentaNoRegistrada)
         }
+
+        fn _usuario_con_rol(&self, usuario: Usuario, rol: Rol) -> Result<(), ErroresContrato> {
+            if usuario.roles.contains(&rol) {
+                return Ok(());
+            }
+            Err(ErroresContrato::UsuarioSinRoles)
+        }
+
+
     }
 
     impl GestionOrden for Contrato {
@@ -838,7 +863,7 @@ mod contrato {
         #[ink(message)]
         pub fn cancelar_producto(&mut self, id_orden: u32) -> Result<String, ErroresContrato> {
             // Compruebo que el usuario existe y posee rol de vendedor
-            self._usuario_con_rol(Rol::Comprador)?; //TODO: me parece que habia una logica adicional en el cancelar... CHEQUEAR
+            self._usuario_con_rol(Rol::Comprador)?;
             self._cancelar_orden(id_orden)?;
             Ok(String::from("La orden fue cancelada correctamente"))
         }
@@ -873,24 +898,10 @@ mod contrato {
             self._listar_categorias()
         }
 
-        fn _usuario_existe(&self) -> Result<(), ErroresContrato> {
-            let caller = &self.env().caller();
-            if self.get_usuario_by_id(caller).is_err() {
-                return Err(ErroresContrato::CuentaNoRegistrada);
-            };
-            Ok(())
-        }
-
-        fn _usuario_con_rol(&self, rol: Rol) -> Result<(), ErroresContrato> {
-            let caller = self.env().caller();
-            let usuario = self
-                .m_usuarios
-                .get(caller)
-                .ok_or(ErroresContrato::CuentaNoRegistrada)?;
-            if usuario.roles.contains(&rol) {
-                return Ok(());
-            }
-            Err(ErroresContrato::UsuarioSinRoles)
+        /// Asignar un rol de usuario a un usuario dado
+        #[ink(message)]
+        pub fn asignar_rol(&mut self, rol: Rol) -> Result<String, ErroresContrato> {
+            self._asignar_rol(self.env().caller(), rol)  
         }
     }
 }
