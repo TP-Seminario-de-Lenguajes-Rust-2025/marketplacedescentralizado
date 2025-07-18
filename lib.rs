@@ -44,6 +44,7 @@ mod contract {
         IndiceInvalido,
         AlreadyHasRol,
         CantidadEnCarritoMenorAUno,
+        ListaSinProductos,
     }
 
     pub trait GestionProducto {
@@ -1148,6 +1149,7 @@ mod tests {
         let existe = sistema.producto_existe(&producto);
         assert!(!existe);
     }
+
     // descontar_stock_producto (caso exitoso)
     #[ink::test]
     fn test_descontar_stock_producto_exitoso() {
@@ -1169,6 +1171,7 @@ mod tests {
         let esperado = Producto::new(0, id, "Zapatilla".into(), "desc".into(), 0, 7);
         assert!(productos[0].eq(&esperado));
     }
+    // descontar_stock_producto (caso falla producto inexistente)
     #[ink::test]
     fn test_descontar_stock_falla_producto_inexistente() {
         let mut sistema = setup_sistema();
@@ -1176,6 +1179,7 @@ mod tests {
         assert!(res.is_err());
         assert_eq!(res.unwrap_err(), ErroresContrato::ProductoInexistente);
     }
+    // descontar_stock_producto (caso falla stock insuficiente)
     #[ink::test]
     fn test_descontar_stock_falla_stock_insuficiente() {
         let mut sistema = setup_sistema();
@@ -1210,5 +1214,13 @@ mod tests {
 
         let esperado = Producto::new(0, id, "Zapatilla".into(), "desc".into(), 0, 10);
         assert!(productos[0].eq(&esperado));
+    }
+    /// Test para listar productos sin productos registrado
+    #[ink::test]
+    fn test_listar_productos_sin_productos() {
+        let sistema = setup_sistema();
+
+        let res = sistema._listar_productos();
+        assert!(res.is_empty());
     }
 }
