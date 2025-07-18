@@ -863,6 +863,7 @@ mod contract {
     ///Estructura de un producto
     #[cfg_attr(feature = "std", derive(ink::storage::traits::StorageLayout))]
     #[ink::scale_derive(Encode, Decode, TypeInfo)]
+    #[derive(PartialEq,Debug)]
     pub struct Producto {
         id: u32,
         id_vendedor: AccountId,
@@ -1088,7 +1089,7 @@ mod tests {
         assert_eq!(productos.len(), 1);
 
         let esperado = Producto::new(0, id, "Zapatilla".into(), "desc".into(), 0, 10);
-        assert!(productos[0].eq(&esperado));
+        assert_eq!(productos[0], esperado);
     }
 
     //test falla por que el producto esta duplicado
@@ -1162,14 +1163,12 @@ mod tests {
         sistema
             ._crear_producto(id, "Zapatilla".into(), "desc".into(), "Ropa".into(), 10)
             .unwrap();
-
-        // descontar 3 unidades
         let res = sistema.descontar_stock_producto(0, 3);
         assert!(res.is_ok());
 
         let productos = sistema._listar_productos();
         let esperado = Producto::new(0, id, "Zapatilla".into(), "desc".into(), 0, 7);
-        assert!(productos[0].eq(&esperado));
+        assert_eq!(productos[0], esperado);
     }
     // descontar_stock_producto (caso falla producto inexistente)
     #[ink::test]
@@ -1213,7 +1212,7 @@ mod tests {
         assert_eq!(productos.len(), 1);
 
         let esperado = Producto::new(0, id, "Zapatilla".into(), "desc".into(), 0, 10);
-        assert!(productos[0].eq(&esperado));
+        assert_eq!(productos[0], esperado); //modificado
     }
     /// Test para listar productos sin productos registrado
     #[ink::test]
