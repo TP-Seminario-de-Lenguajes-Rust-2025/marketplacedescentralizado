@@ -763,9 +763,10 @@ mod contract {
         }
 
         fn clean_cat_name(&self, nombre: &String) -> Result<String,ErroresContrato> {
-            nombre.to_lowercase().trim().to_string().truncate(100);
-            if !nombre.is_empty(){
-                Ok(nombre.to_owned())
+            let mut limpio = nombre.to_lowercase().trim().to_string();
+            limpio.truncate(100);
+            if !limpio.is_empty(){
+                Ok(limpio)
             }else{Err(ErroresContrato::NombreCategoriaVacio)}
         }
     }
@@ -1031,10 +1032,11 @@ mod contract {
 #[cfg(test)]
 mod tests {
     use crate::contract::*;
+    use ink::{env::{test::set_callee, DefaultEnvironment}, primitives::AccountId};
+    use ink_e2e::{account_id, AccountKeyring};
 
-    fn contrato_con_categorias_vacia() -> Sistema{
-        let sist = Sistema::new();
-        return sist
+    fn setup_sistema() -> Sistema {
+        Sistema::new()
     }
 
     fn contrato_con_categorias_cargada() -> Sistema{
@@ -1045,9 +1047,9 @@ mod tests {
         return sist
     }
 
-    #[test]
+    #[ink::test]
     fn test_categoria_agregar_nueva() {
-        let mut sist = contrato_con_categorias_vacia();
+        let mut sist = setup_sistema();
 
         assert!(sist._listar_categorias().is_empty());
 
@@ -1057,37 +1059,160 @@ mod tests {
         assert_eq!(sist._listar_categorias().len(), 1);
     }
 
-    #[test]
+    #[ink::test]
     fn test_categoria_agregar_duplicada() {
         let mut sist = contrato_con_categorias_cargada();
 
         assert!(!sist._listar_categorias().is_empty());
         let result = sist._registrar_categoria("categoria 1".to_string());
-        assert_eq!(result, Err(ErroresContrato::CategoriaYaExistente));
+        assert_eq!(result, Err(ErroresContrato::CategoriaYaExistente), "deberia tirar error que ya existe la categoria");
     }
 
-    #[test]
-    fn test_categoria_agregar_nombre_similar() {
-        
+    #[ink::test]
+    fn test_categoria_formateo_nombre() {
+        let mut sist = contrato_con_categorias_cargada();
+
+        //nombre similar
+        let result = sist._registrar_categoria("CaTEgORia 1".to_string());
+        assert_eq!(result, Err(ErroresContrato::CategoriaYaExistente),"deberia devolver que ya existe la categoria");
+
+        //nombre vacio
+        let result = sist._registrar_categoria(String::new());
+        assert_eq!(result, Err(ErroresContrato::NombreCategoriaVacio), "deberia devolver que el nombre de la categoria esta vacia");
+
+
+        //nombres con unicode
+        let result = sist._registrar_categoria("не ваше дела идите на хуй".to_string());
+        assert_eq!(result, Ok(String::from("la categoria fue registrada correctamente")),"deberia poder manejar alfabeto cirilico");
+        let result = sist._registrar_categoria("የክፋት እቅድ".to_string());
+        assert_eq!(result, Ok(String::from("la categoria fue registrada correctamente")),"deberia poder manejar alfabeto amharico");
+        let result = sist._registrar_categoria("プログラミングが好きです".to_string());
+        assert_eq!(result, Ok(String::from("la categoria fue registrada correctamente")),"deberia poder manejar kanji, katakana e hiragana");
+        let result = sist._registrar_categoria("사랑해요".to_string());
+        assert_eq!(result, Ok(String::from("la categoria fue registrada correctamente")),"deberia poder manejar hangul");
+
+
+        //nombre con leading y trailing whitespace
+        let result = sist._registrar_categoria("          alguna categoria                                                ".to_string());
+        assert_eq!(result, Ok(String::from("la categoria fue registrada correctamente")),"deberia eliminar espacios en blanco al principio y final del string");
+
+        //nombre truncado
+
+        let result = sist._registrar_categoria(
+            "You know what they call a  Quarter Pounder with Cheese in Paris?
+
+            [JULES]
+            They don't call it a Quarter Pounder with Cheese?
+
+            [VINCENT]
+            No, they got the metric system there, they wouldn't know what the fuck a Quarter Pounder is.
+
+            [JULES]
+            Then what do they call it?
+
+            [VINCENT]
+            They call it Royale with Cheese.
+
+            [JULES]
+            Royale with Cheese. What do they call a Big Mac?
+
+            [VINCENT]
+            Big Mac's a Big Mac, but they call it Le Big Mac.
+
+            [JULES]
+            Le big Mac! Ahhaha, what do they call a Whopper?
+
+            [VINCENT]
+            I dunno, I didn't go into a Burger King.".to_string()
+        );
+        assert_eq!(result, Ok(String::from("la categoria fue registrada correctamente")),"deberia poder manejar nombres muy largos, truncandolos en 100 caracteres");
     }
 
-    #[test]
-    fn test_categoria_agregar_nombre_unicode() {
-        
+
+
+    #[ink::test]
+    fn test_categoria_indice_correcto_por_nombre() {
+        let sist = contrato_con_categorias_cargada();
+        assert_eq!(sist.get_categoria_by_name(&"categoria 9".to_string()),Ok(9),"deberia devolver el indice correcto");
+        assert_eq!(sist.get_categoria_by_name(&"categoria 3".to_string()),Ok(3),"deberia devolver el indice correcto");
+        assert_eq!(sist.get_categoria_by_name(&"      categoria 4       ".to_string()),Ok(4),"deberia devolver el indice correcto incluso con whitespace");
+        assert_eq!(sist.get_categoria_by_name(&"cAtEGoRiA 5".to_string()),Ok(5),"deberia devolver el indice correcto incluso con mayusculas");
+
+        assert_eq!(sist.get_categoria_by_name(&"Electrodomesticos".to_string()),Err(ErroresContrato::CategoriaInexistente),"deberia devolver que no encuentra la categoria");
     }
 
-    #[test]
-    fn test_categoria_agregar_nombre_vacio() {
-        
+    #[ink::test]
+    fn test_categoria_get_categoria_whitespaces() {
+        let sist = contrato_con_categorias_cargada();
+        assert_eq!(sist.get_categoria_by_name(&"      categoria 4       ".to_string()),Ok(4),"deberia devolver el indice correcto incluso con whitespace");
     }
 
-    #[test]
-    fn test_categoria_verificar_creacion_id() {
-        
+    #[ink::test]
+    fn test_categoria_get_categoria_case_sensitivity() {
+        let sist = contrato_con_categorias_cargada();
+        assert_eq!(sist.get_categoria_by_name(&"cAtEGoRiA 5".to_string()),Ok(5),"deberia devolver el indice correcto incluso con mayusculas");
     }
 
-    #[test]
-    fn test_categoria_max_capacidad_alcanzado() {
-        
+    #[ink::test]
+    fn test_categoria_get_categoria_inexistente() {
+        let sist = contrato_con_categorias_cargada();
+        assert_eq!(sist.get_categoria_by_name(&"Electrodomesticos".to_string()),Err(ErroresContrato::CategoriaInexistente),"deberia devolver que no encuentra la categoria");
     }
+
+    #[ink::test]
+    fn test_categoria_clean_name() {
+        let sist = setup_sistema();
+        assert_eq!(sist.clean_cat_name(&"Electrodomésticos".to_string()),Ok("electrodomésticos".to_string()));
+    }
+
+    #[ink::test]
+    fn test_categoria_clean_name_whitespaces() {
+        let sist = setup_sistema();
+        assert_eq!(sist.clean_cat_name(&"      cocina        ".to_string()),Ok("cocina".to_string()));
+    }
+
+    #[ink::test]
+    fn test_categoria_clean_name_empty() {
+        let sist = setup_sistema();
+        assert_eq!(sist.clean_cat_name(&"".to_string()),Err(ErroresContrato::NombreCategoriaVacio));
+    }
+
+    #[ink::test]
+    fn test_categoria_clean_name_max_characters() {
+        let sist = setup_sistema();
+        assert_eq!(sist.clean_cat_name(&"
+            You know what they call a  Quarter Pounder with Cheese in Paris?
+
+            [JULES]
+            They don't call it a Quarter Pounder with Cheese?
+
+            [VINCENT]
+            No, they got the metric system there, they wouldn't know what the fuck a Quarter Pounder is.
+
+            [JULES]
+            Then what do they call it?
+
+            [VINCENT]
+            They call it Royale with Cheese.
+
+            [JULES]
+            Royale with Cheese. What do they call a Big Mac?
+
+            [VINCENT]
+            Big Mac's a Big Mac, but they call it Le Big Mac.
+
+            [JULES]
+            Le big Mac! Ahhaha, what do they call a Whopper?
+
+            [VINCENT]
+            I dunno, I didn't go into a Burger King.".to_string()
+        ),
+            Ok("You know what they call a  Quarter Pounder with Cheese in Paris?
+
+            [JULES]
+            Th".to_string())
+        );
+    }
+
+
 }
