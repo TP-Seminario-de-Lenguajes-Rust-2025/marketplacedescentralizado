@@ -14,7 +14,7 @@ mod contract {
     const VENDEDOR: Rol = Rol::Vendedor;
 
     #[ink::scale_derive(Encode, Decode, TypeInfo)]
-    #[derive(Debug)]
+    #[derive(Debug, PartialEq)]
     pub enum ErroresContrato {
         UsuarioSinRoles,
         UsuarioYaExistente,
@@ -22,6 +22,7 @@ mod contract {
         UsuarioYaEsComprador,
         UsuarioYaEsVendedor,
         UsuarioNoExiste,
+        UsuarioNoTieneRol,
         OrdenNoPendiente,
         OrdenNoEnviada,
         OrdenYaCancelada,
@@ -532,17 +533,18 @@ mod contract {
         /// Verifica si ya existe un usuario con el mail dado
         fn get_usuario_by_mail(&self, mail: &str) -> Result<Usuario, ErroresContrato> {
             for i in 0..self.v_usuarios.len() {
-                if let Some(account_id) = self.v_usuarios.get(i) {
-                    if let Some(usuario) = self.m_usuarios.get(account_id) {
-                        if usuario.mail == mail {
-                            return Ok(usuario);
-                        }
-                    } else {
-                        return Err(ErroresContrato::AccountIdInvalida);
-                    } //esto deberia cortar si no puede encontrar un id o usuario, ya que no esta recorriendo efectivamente posiciones con usuarios
-                } else {
-                    return Err(ErroresContrato::IndiceInvalido);
-                }
+                let account_id = self
+                    .v_usuarios
+                    .get(i)
+                    .ok_or(ErroresContrato::IndiceInvalido)?;
+
+                let usuario = self
+                    .m_usuarios
+                    .get(account_id)
+                    .ok_or(ErroresContrato::AccountIdInvalida)?;
+                if usuario.mail == mail {
+                    return Ok(usuario);
+                };
             }
             Err(ErroresContrato::MailInexistente)
         }
@@ -766,7 +768,6 @@ mod contract {
 
     /// Roles existentes
     #[ink::scale_derive(Encode, Decode, TypeInfo)]
-    //#[derive(Debug, PartialEq, Eq, Clone)]
     #[cfg_attr(feature = "std", derive(StorageLayout))]
     #[derive(PartialEq, Clone)]
     pub enum Rol {
@@ -777,7 +778,7 @@ mod contract {
     /// Estructura que define al Usuario
     #[cfg_attr(feature = "std", derive(ink::storage::traits::StorageLayout))]
     #[ink::scale_derive(Encode, Decode, TypeInfo)]
-    //#[derive(Clone)]
+    #[derive(Clone)]
     pub struct Usuario {
         id: AccountId,
         nombre: String,
@@ -798,27 +799,34 @@ mod contract {
             }
         }
 
-        pub fn registrar_comprador(&mut self) -> Result<(), ErroresContrato> {
-            if !self.has_role(COMPRADOR) {
-                self.roles.push(COMPRADOR);
+        /// Remueve el rol del usuario si existe
+        pub fn remover_rol(&mut self, rol: Rol) -> Result<(), ErroresContrato> {
+            if self.has_role(rol) {
+                self.roles.retain(|rol| *rol != COMPRADOR);
                 Ok(())
             } else {
-                Err(ErroresContrato::UsuarioYaEsComprador)
+                Err(ErroresContrato::UsuarioNoTieneRol)
             }
         }
 
-        pub fn registrar_vendedor(&mut self) -> Result<(), ErroresContrato> {
-            if !self.has_role(VENDEDOR) {
-                self.roles.push(VENDEDOR);
-                Ok(())
-            } else {
-                Err(ErroresContrato::UsuarioYaEsVendedor)
-            }
-        }
-
-        ///Devuelve true si el usuario contiene el rol pasado por parametro
+        /// Devuelve true si el usuario contiene el rol pasado por parametro
         pub fn has_role(&self, rol: Rol) -> bool {
             self.roles.contains(&rol)
+        }
+
+        /// Devuelve el nombre del usuario
+        pub fn get_name(&self) -> String {
+            self.nombre.clone()
+        }
+
+        /// Devuelve el email del usuario
+        pub fn get_mail(&self) -> String {
+            self.mail.clone()
+        }
+
+        /// Devuelve el AccountId del usuario
+        pub fn get_id(&self) -> AccountId {
+            self.id.clone()
         }
     }
 
@@ -1022,10 +1030,158 @@ mod contract {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::contract::*;
+    use ink::{env::DefaultEnvironment, primitives::AccountId};
+    use ink_e2e::{account_id, AccountKeyring};
 
-    #[test]
+    fn setup_sistema() -> Sistema {
+        Sistema::new()
+    }
+
+    fn id_comprador() -> <DefaultEnvironment as ink::env::Environment>::AccountId {
+        account_id(AccountKeyring::Alice)
+    }
+
+    fn id_vendedor() -> <DefaultEnvironment as ink::env::Environment>::AccountId {
+        account_id(AccountKeyring::Bob)
+    }
+
+    fn build_testing_accounts() -> (AccountId, AccountId) {
+        let id_comprador = id_comprador();
+        let id_vendedor = id_vendedor();
+        (id_comprador, id_vendedor)
+    }
+
+    fn build_testing_setup() -> (Sistema, AccountId, AccountId) {
+        let mut app = setup_sistema();
+        let (user_1, user_2) = build_testing_accounts();
+
+        app._registrar_usuario(
+            user_1,
+            "user_name_1".to_string(),
+            "user_email_1".to_string(),
+        )
+        .expect("No se pudo registrar el usuario");
+        app._registrar_usuario(
+            user_2,
+            "user_name_2".to_string(),
+            "user_email_2".to_string(),
+        )
+        .expect("No se pudo registrar el usuario");
+
+        (app, user_1, user_2)
+    }
+
+    #[ink::test]
     fn registra_usuario_correctamente() {
-        let app = Sistema::new();
+        let mut app = setup_sistema();
+        let (id_comprador, _) = build_testing_accounts();
+
+        assert!(
+            app._registrar_usuario(
+                id_comprador,
+                "user_name".to_string(),
+                "user_email".to_string()
+            )
+            .is_ok(),
+            "Se esperaba que se registre un usuario"
+        );
+
+        let user_created = app.listar_usuarios()[0].clone();
+
+        assert_eq!(user_created.get_name(), "user_name".to_string());
+        assert_eq!(user_created.get_mail(), "user_email".to_string());
+    }
+
+    #[ink::test]
+    fn devuelve_user_con_id_correctamente() {
+        let (mut app, user_id, _) = build_testing_setup();
+        let expected = app.listar_usuarios()[0].clone();
+
+        assert_eq!(
+            app.get_user(&user_id).unwrap().get_name(),
+            expected.get_name(),
+            "Se esperaba que el campo nombre coincida"
+        );
+
+        assert_eq!(
+            app.get_user(&user_id).unwrap().get_mail(),
+            expected.get_mail(),
+            "Se esperaba que el campo mail coincida"
+        );
+
+        assert_eq!(
+            app.get_user(&user_id).unwrap().get_id(),
+            expected.get_id(),
+            "Se esperaba que el campo ID coincida"
+        );
+    }
+
+    #[ink::test]
+    fn devuelve_user_con_email_correctamente() {
+        let (app, _, _) = build_testing_setup();
+        let expected = app.listar_usuarios()[0].clone();
+
+        assert!(
+            app.get_usuario_by_mail("not_existent_email@email.com")
+                .is_err(),
+            "Se esperaba un error si no existe un usuario con el email"
+        );
+
+        assert_eq!(
+            app.get_usuario_by_mail(&expected.get_mail())
+                .unwrap()
+                .get_name(),
+            expected.get_name(),
+            "Se esperaba que el campo nombre coincida"
+        );
+
+        assert_eq!(
+            app.get_usuario_by_mail(&expected.get_mail())
+                .unwrap()
+                .get_mail(),
+            expected.get_mail(),
+            "Se esperaba que el campo mail coincida"
+        );
+
+        assert_eq!(
+            app.get_usuario_by_mail(&expected.get_mail())
+                .unwrap()
+                .get_id(),
+            expected.get_id(),
+            "Se esperaba que el campo ID coincida"
+        );
+    }
+
+    #[ink::test]
+    fn asigna_rol_correctamente() {
+        let (mut app, user_id, _) = build_testing_setup();
+
+        assert!(
+            app._asignar_rol(user_id, Rol::Vendedor).is_ok(),
+            "Se esperaba que se asigne el rol correctamente"
+        );
+
+        assert!(
+            app._asignar_rol(user_id, Rol::Comprador).is_ok(),
+            "Se esperaba que se asigne el rol correctamente"
+        );
+
+        assert_eq!(
+            app._asignar_rol(user_id, Rol::Comprador),
+            Err(ErroresContrato::AlreadyHasRol),
+            "Se esperaba error AlreadyHasRol si el usuario ya tiene el error asignado"
+        );
+    }
+
+    #[ink::test]
+    fn listar_usuarios_correctamente() {
+        let (mut app, user1_id, user2_id) = build_testing_setup();
+        let expected = Vec::from([app.get_user(&user1_id), app.get_user(&user2_id)]);
+        assert_eq!(
+            app.listar_usuarios().len(),
+            expected.len(),
+            "Se esperaba que los vectores tengan el mismo largo"
+        );
     }
 }
