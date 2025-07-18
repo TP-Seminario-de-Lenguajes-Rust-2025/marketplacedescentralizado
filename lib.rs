@@ -73,6 +73,10 @@ mod contract {
         fn _listar_usuarios(&self) -> Vec<Usuario>;
         
         fn get_usuario_by_mail(&self, mail: &str) -> Result<Usuario, ErroresContrato>;
+
+        fn _usuario_con_rol(&self, rol: Rol) -> Result<(), ErroresContrato>;
+
+        fn _asignar_rol(&mut self, id:AccountId, rol:Rol) -> Result<String, ErroresContrato>;
     }
 
     pub trait GestionOrden{
@@ -118,7 +122,7 @@ mod contract {
 
         fn _listar_categorias(&self) -> Vec<Categoria>;
 
-        fn get_categoria_by_name(&self, nombre: &String) -> Result<Categoria, ErroresContrato>;
+        fn get_categoria_by_name(&self, nombre: &String) -> Result<u32, ErroresContrato>;
 
         fn clean_cat_name(&self, nombre: &String) -> String;
     }
@@ -240,7 +244,16 @@ mod contract {
         /// # Errores
         /// - `CuentaNoRegistrada`: Si el usuario que intenta registrar la categoría no está registrado.
         /// - `CategoriaYaExistente`: Si la categoria ya existe actualmente.
-        
+        #[ink(message)]
+        pub fn registrar_categoria(
+            &mut self,
+            nombre: String,
+            descripcion: String,
+        ) -> Result<String, ErroresContrato> {
+            // Comprobar que el usuario esta registrado en la plataforma
+            self.get_user(&self.env().caller())?;
+            return self._registrar_categoria(nombre);
+        }
 
 
         
@@ -394,28 +407,6 @@ mod contract {
             self._listar_categorias()
         }
 
-        fn _asignar_rol(&mut self, id:AccountId, rol:Rol) -> Result<String, ErroresContrato>{
-            let mut usuario = self.get_user(&id)?;
-            if usuario.has_role(rol.clone()){
-                return Err(ErroresContrato::AlreadyHasRol)
-            }
-            usuario.roles.push(rol);
-            self.m_usuarios.insert(id, &usuario);
-            Ok(String::from("rol agregado correctamente"))
-        }
-
-        fn _usuario_con_rol(&self, rol: Rol) -> Result<(), ErroresContrato> {
-            let caller = self.env().caller();
-            let usuario = self
-                .m_usuarios
-                .get(caller)
-                .ok_or(ErroresContrato::CuentaNoRegistrada)?;
-            if usuario.has_role(rol) {
-                return Ok(());
-            }
-            Err(ErroresContrato::RolNoApropiado)
-        }
-
     }
 
     impl GestionProducto for Sistema{
@@ -424,20 +415,13 @@ mod contract {
             id_vendedor: AccountId,
             nombre: String,
             descripcion: String,
-            categoria: String,
+            categoria: u32,
             stock: u32
         ) -> Result<(),ErroresContrato> {
             let id = self.productos.len();
             let usuario = self.get_user(&id_vendedor)?;
             if usuario.has_role(VENDEDOR){
-                let id_cat;
-                if self.get_categoria_by_name(&categoria).is_ok(){
-                    id_cat = self.get_categoria_by_name(&categoria) 
-                }else{
-                    self._registrar_categoria(&categoria)?;
-                    id_cat = self.get_categoria_by_name(&categoria) 
-                }
-                let producto = Producto::new(id, id_vendedor, nombre, descripcion, id_cat, stock);
+                let producto = Producto::new(id, id_vendedor, nombre, descripcion, categoria, stock);
                 if !self.producto_existe(&producto){
                     self.productos.push(&producto);
                     Ok(())
@@ -530,6 +514,28 @@ mod contract {
                 }else{return Err(ErroresContrato::IndiceInvalido)}
             }
             Err(ErroresContrato::MailInexistente)
+        }
+
+        fn _asignar_rol(&mut self, id:AccountId, rol:Rol) -> Result<String, ErroresContrato>{
+            let mut usuario = self.get_user(&id)?;
+            if usuario.has_role(rol.clone()){
+                return Err(ErroresContrato::AlreadyHasRol)
+            }
+            usuario.roles.push(rol);
+            self.m_usuarios.insert(id, &usuario);
+            Ok(String::from("rol agregado correctamente"))
+        }
+
+        fn _usuario_con_rol(&self, rol: Rol) -> Result<(), ErroresContrato> {
+            let caller = self.env().caller();
+            let usuario = self
+                .m_usuarios
+                .get(caller)
+                .ok_or(ErroresContrato::CuentaNoRegistrada)?;
+            if usuario.has_role(rol) {
+                return Ok(());
+            }
+            Err(ErroresContrato::RolNoApropiado)
         }
     }
 
