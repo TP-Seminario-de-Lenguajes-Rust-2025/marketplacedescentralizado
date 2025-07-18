@@ -44,6 +44,7 @@ mod contract {
         AlreadyHasRol,
         CantidadEnCarritoMenorAUno,
         NombreCategoriaVacio,
+        MaxCategoriasAlcanzado
     }
 
     pub trait GestionProducto {
@@ -729,6 +730,9 @@ mod contract {
             }
 
             // Agregar categoria
+            if self.categorias.len() == u32::MAX{
+                return Err(ErroresContrato::MaxCategoriasAlcanzado)
+            }
             let id = self.categorias.len();
             let nueva_categoria = Categoria::new(id, self.clean_cat_name(&nombre)?);
             self.categorias.push(&nueva_categoria);
@@ -1054,6 +1058,11 @@ mod tests {
 
     #[test]
     fn test_categoria_agregar_nombre_unicode() {
+        
+    }
+
+    #[test]
+    fn test_categoria_agregar_nombre_vacio() {
         
     }
 
