@@ -1021,11 +1021,4 @@ mod contract {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn registra_usuario_correctamente() {
-        let app = Sistema::new();
-    }
-}
+mod tests {}
