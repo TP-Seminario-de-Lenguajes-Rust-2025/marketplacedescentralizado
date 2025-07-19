@@ -105,7 +105,6 @@ mod contract {
 
         fn _recibir_orden(&mut self, id_orden: u32) -> Result<(), ErroresContrato>;
 
-
         //fn _cancelar_orden(&mut self, id_orden: u32) -> Result<(), ErroresContrato>;
     }
 
@@ -138,7 +137,7 @@ mod contract {
 
         fn get_categoria_by_name(&self, nombre: &String) -> Result<u32, ErroresContrato>;
 
-        fn clean_cat_name(&self, nombre: &String) -> Result<String,ErroresContrato>;
+        fn clean_cat_name(&self, nombre: &String) -> Result<String, ErroresContrato>;
     }
 
     // pub trait ControlStock {
@@ -644,7 +643,6 @@ mod contract {
             }
         }
 
-
         // fn _cancelar_orden(&mut self, id_orden: u32) -> Result<(), ErroresContrato> {
         //     let mut orden = self
         //         .ordenes
@@ -737,8 +735,8 @@ mod contract {
             }
 
             // Agregar categoria
-            if self.categorias.len() == u32::MAX{
-                return Err(ErroresContrato::MaxCategoriasAlcanzado)
+            if self.categorias.len() == u32::MAX {
+                return Err(ErroresContrato::MaxCategoriasAlcanzado);
             }
             let id = self.categorias.len();
             let nueva_categoria = Categoria::new(id, self.clean_cat_name(&nombre)?);
@@ -769,12 +767,14 @@ mod contract {
             Err(ErroresContrato::CategoriaInexistente)
         }
 
-        fn clean_cat_name(&self, nombre: &String) -> Result<String,ErroresContrato> {
+        fn clean_cat_name(&self, nombre: &String) -> Result<String, ErroresContrato> {
             let mut limpio = String::from(nombre.to_lowercase().trim());
             limpio.truncate(100);
-            if !limpio.is_empty(){
+            if !limpio.is_empty() {
                 Ok(limpio)
-            }else{Err(ErroresContrato::NombreCategoriaVacio)}
+            } else {
+                Err(ErroresContrato::NombreCategoriaVacio)
+            }
         }
     }
 
@@ -814,14 +814,14 @@ mod contract {
         }
 
         /// Remueve el rol del usuario si existe
-        pub fn remover_rol(&mut self, rol: Rol) -> Result<(), ErroresContrato> {
-            if self.has_role(rol) {
-                self.roles.retain(|rol| *rol != COMPRADOR);
-                Ok(())
-            } else {
-                Err(ErroresContrato::UsuarioNoTieneRol)
-            }
-        }
+        // pub fn remover_rol(&mut self, rol: Rol) -> Result<(), ErroresContrato> {
+        //     if self.has_role(rol) {
+        //         self.roles.retain(|rol| *rol != COMPRADOR);
+        //         Ok(())
+        //     } else {
+        //         Err(ErroresContrato::UsuarioNoTieneRol)
+        //     }
+        // }
 
         /// Devuelve true si el usuario contiene el rol pasado por parametro
         pub fn has_role(&self, rol: Rol) -> bool {
@@ -949,14 +949,6 @@ mod contract {
     }
 
     impl Publicacion {
-        pub fn toggle_activa(&mut self) {
-            self.activa = !self.activa;
-        }
-
-        pub fn is_activa(&self) -> bool {
-            self.activa
-        }
-
         pub fn stock(&self) -> u32 {
             self.stock
         }
@@ -1006,6 +998,7 @@ mod contract {
     ///Estructura de orden
     #[cfg_attr(feature = "std", derive(ink::storage::traits::StorageLayout))]
     #[ink::scale_derive(Encode, Decode, TypeInfo)]
+    #[derive(Clone)]
     pub struct Orden {
         //info de la orden
         id: u32,
@@ -1041,11 +1034,11 @@ mod contract {
                 cal_comprador: None,
             }
         }
-        pub fn get_cantidad(&self)->u32{
+        pub fn get_cantidad(&self) -> u32 {
             self.cantidad
         }
 
-        pub fn get_status(&self)->EstadoOrden{
+        pub fn get_status(&self) -> EstadoOrden {
             self.status
         }
         //pub fn cambiar_estado
@@ -1059,13 +1052,16 @@ mod contract {
 mod tests {
     use crate::contract::*;
 
-    use ink::{env::{test::set_callee, DefaultEnvironment}, primitives::AccountId};
+    use ink::{
+        env::{test::set_callee, DefaultEnvironment},
+        primitives::AccountId,
+    };
     use ink_e2e::{account_id, AccountKeyring};
-  
+
     fn setup_sistema() -> Sistema {
         Sistema::new()
     }
-  
+
     fn id_comprador() -> <DefaultEnvironment as ink::env::Environment>::AccountId {
         account_id(AccountKeyring::Alice)
     }
@@ -1077,14 +1073,13 @@ mod tests {
     fn set_caller(caller: AccountId) {
         ink::env::test::set_caller::<DefaultEnvironment>(caller);
     }
-  
 
     fn build_testing_accounts() -> (AccountId, AccountId) {
         let id_comprador = id_comprador();
         let id_vendedor = id_vendedor();
         (id_comprador, id_vendedor)
     }
-  
+
     fn build_testing_setup() -> (Sistema, AccountId, AccountId) {
         let mut app = setup_sistema();
         let (user_1, user_2) = build_testing_accounts();
@@ -1104,7 +1099,7 @@ mod tests {
 
         (app, user_1, user_2)
     }
-  
+
     //fn de test de agus olthoff
 
     fn registrar_comprador(
@@ -1129,12 +1124,12 @@ mod tests {
         sistema._registrar_categoria(nombre.into()).unwrap();
     }
 
-    fn contrato_con_categorias_cargada() -> Sistema{
+    fn contrato_con_categorias_cargada() -> Sistema {
         let mut sist = Sistema::new();
-        for i in 0..10{
-            sist._registrar_categoria(String::from(format!("categoria {}",i)));
+        for i in 0..10 {
+            sist._registrar_categoria(String::from(format!("categoria {}", i)));
         }
-        return sist
+        return sist;
     }
 
     #[ink::test]
@@ -1406,7 +1401,10 @@ mod tests {
 
         let result = sist._registrar_categoria("Limpieza".to_string());
 
-        assert_eq!(result, Ok(String::from("la categoria fue registrada correctamente")));
+        assert_eq!(
+            result,
+            Ok(String::from("la categoria fue registrada correctamente"))
+        );
         assert_eq!(sist._listar_categorias().len(), 1);
     }
 
@@ -1416,7 +1414,11 @@ mod tests {
 
         assert!(!sist._listar_categorias().is_empty());
         let result = sist._registrar_categoria("categoria 1".to_string());
-        assert_eq!(result, Err(ErroresContrato::CategoriaYaExistente), "deberia tirar error que ya existe la categoria");
+        assert_eq!(
+            result,
+            Err(ErroresContrato::CategoriaYaExistente),
+            "deberia tirar error que ya existe la categoria"
+        );
     }
 
     #[ink::test]
@@ -1425,27 +1427,56 @@ mod tests {
 
         //nombre similar
         let result = sist._registrar_categoria("CaTEgORia 1".to_string());
-        assert_eq!(result, Err(ErroresContrato::CategoriaYaExistente),"deberia devolver que ya existe la categoria");
+        assert_eq!(
+            result,
+            Err(ErroresContrato::CategoriaYaExistente),
+            "deberia devolver que ya existe la categoria"
+        );
 
         //nombre vacio
         let result = sist._registrar_categoria(String::new());
-        assert_eq!(result, Err(ErroresContrato::NombreCategoriaVacio), "deberia devolver que el nombre de la categoria esta vacia");
-
+        assert_eq!(
+            result,
+            Err(ErroresContrato::NombreCategoriaVacio),
+            "deberia devolver que el nombre de la categoria esta vacia"
+        );
 
         //nombres con unicode
         let result = sist._registrar_categoria("не ваше дела идите на хуй".to_string());
-        assert_eq!(result, Ok(String::from("la categoria fue registrada correctamente")),"deberia poder manejar alfabeto cirilico");
+        assert_eq!(
+            result,
+            Ok(String::from("la categoria fue registrada correctamente")),
+            "deberia poder manejar alfabeto cirilico"
+        );
         let result = sist._registrar_categoria("የክፋት እቅድ".to_string());
-        assert_eq!(result, Ok(String::from("la categoria fue registrada correctamente")),"deberia poder manejar alfabeto amharico");
+        assert_eq!(
+            result,
+            Ok(String::from("la categoria fue registrada correctamente")),
+            "deberia poder manejar alfabeto amharico"
+        );
         let result = sist._registrar_categoria("プログラミングが好きです".to_string());
-        assert_eq!(result, Ok(String::from("la categoria fue registrada correctamente")),"deberia poder manejar kanji, katakana e hiragana");
+        assert_eq!(
+            result,
+            Ok(String::from("la categoria fue registrada correctamente")),
+            "deberia poder manejar kanji, katakana e hiragana"
+        );
         let result = sist._registrar_categoria("사랑해요".to_string());
-        assert_eq!(result, Ok(String::from("la categoria fue registrada correctamente")),"deberia poder manejar hangul");
-
+        assert_eq!(
+            result,
+            Ok(String::from("la categoria fue registrada correctamente")),
+            "deberia poder manejar hangul"
+        );
 
         //nombre con leading y trailing whitespace
-        let result = sist._registrar_categoria("          alguna categoria                                                ".to_string());
-        assert_eq!(result, Ok(String::from("la categoria fue registrada correctamente")),"deberia eliminar espacios en blanco al principio y final del string");
+        let result = sist._registrar_categoria(
+            "          alguna categoria                                                "
+                .to_string(),
+        );
+        assert_eq!(
+            result,
+            Ok(String::from("la categoria fue registrada correctamente")),
+            "deberia eliminar espacios en blanco al principio y final del string"
+        );
 
         //nombre truncado
 
@@ -1476,56 +1507,99 @@ mod tests {
             [VINCENT]
             I dunno, I didn't go into a Burger King.".to_string()
         );
-        assert_eq!(result, Ok(String::from("la categoria fue registrada correctamente")),"deberia poder manejar nombres muy largos, truncandolos en 100 caracteres");
+        assert_eq!(
+            result,
+            Ok(String::from("la categoria fue registrada correctamente")),
+            "deberia poder manejar nombres muy largos, truncandolos en 100 caracteres"
+        );
     }
-
-
 
     #[ink::test]
     fn test_categoria_indice_correcto_por_nombre() {
         let sist = contrato_con_categorias_cargada();
-        assert_eq!(sist.get_categoria_by_name(&"categoria 9".to_string()),Ok(9),"deberia devolver el indice correcto");
-        assert_eq!(sist.get_categoria_by_name(&"categoria 3".to_string()),Ok(3),"deberia devolver el indice correcto");
-        assert_eq!(sist.get_categoria_by_name(&"      categoria 4       ".to_string()),Ok(4),"deberia devolver el indice correcto incluso con whitespace");
-        assert_eq!(sist.get_categoria_by_name(&"cAtEGoRiA 5".to_string()),Ok(5),"deberia devolver el indice correcto incluso con mayusculas");
+        assert_eq!(
+            sist.get_categoria_by_name(&"categoria 9".to_string()),
+            Ok(9),
+            "deberia devolver el indice correcto"
+        );
+        assert_eq!(
+            sist.get_categoria_by_name(&"categoria 3".to_string()),
+            Ok(3),
+            "deberia devolver el indice correcto"
+        );
+        assert_eq!(
+            sist.get_categoria_by_name(&"      categoria 4       ".to_string()),
+            Ok(4),
+            "deberia devolver el indice correcto incluso con whitespace"
+        );
+        assert_eq!(
+            sist.get_categoria_by_name(&"cAtEGoRiA 5".to_string()),
+            Ok(5),
+            "deberia devolver el indice correcto incluso con mayusculas"
+        );
 
-        assert_eq!(sist.get_categoria_by_name(&"Electrodomesticos".to_string()),Err(ErroresContrato::CategoriaInexistente),"deberia devolver que no encuentra la categoria");
+        assert_eq!(
+            sist.get_categoria_by_name(&"Electrodomesticos".to_string()),
+            Err(ErroresContrato::CategoriaInexistente),
+            "deberia devolver que no encuentra la categoria"
+        );
     }
 
     #[ink::test]
     fn test_categoria_get_categoria_whitespaces() {
         let sist = contrato_con_categorias_cargada();
-        assert_eq!(sist.get_categoria_by_name(&"      categoria 4       ".to_string()),Ok(4),"deberia devolver el indice correcto incluso con whitespace");
+        assert_eq!(
+            sist.get_categoria_by_name(&"      categoria 4       ".to_string()),
+            Ok(4),
+            "deberia devolver el indice correcto incluso con whitespace"
+        );
     }
 
     #[ink::test]
     fn test_categoria_get_categoria_case_sensitivity() {
         let sist = contrato_con_categorias_cargada();
-        assert_eq!(sist.get_categoria_by_name(&"cAtEGoRiA 5".to_string()),Ok(5),"deberia devolver el indice correcto incluso con mayusculas");
+        assert_eq!(
+            sist.get_categoria_by_name(&"cAtEGoRiA 5".to_string()),
+            Ok(5),
+            "deberia devolver el indice correcto incluso con mayusculas"
+        );
     }
 
     #[ink::test]
     fn test_categoria_get_categoria_inexistente() {
         let sist = contrato_con_categorias_cargada();
-        assert_eq!(sist.get_categoria_by_name(&"Electrodomesticos".to_string()),Err(ErroresContrato::CategoriaInexistente),"deberia devolver que no encuentra la categoria");
+        assert_eq!(
+            sist.get_categoria_by_name(&"Electrodomesticos".to_string()),
+            Err(ErroresContrato::CategoriaInexistente),
+            "deberia devolver que no encuentra la categoria"
+        );
     }
 
     #[ink::test]
     fn test_categoria_clean_name() {
         let sist = setup_sistema();
-        assert_eq!(sist.clean_cat_name(&"Electrodomésticos".to_string()),Ok("electrodomésticos".to_string()));
+        assert_eq!(
+            sist.clean_cat_name(&"Electrodomésticos".to_string()),
+            Ok("electrodomésticos".to_string())
+        );
     }
 
     #[ink::test]
     fn test_categoria_clean_name_whitespaces() {
         let sist = setup_sistema();
-        assert_eq!(sist.clean_cat_name(&"      cocina        ".to_string()),Ok("cocina".to_string()));
+        assert_eq!(
+            sist.clean_cat_name(&"      cocina        ".to_string()),
+            Ok("cocina".to_string())
+        );
     }
 
     #[ink::test]
     fn test_categoria_clean_name_empty() {
         let sist = setup_sistema();
-        assert_eq!(sist.clean_cat_name(&"".to_string()),Err(ErroresContrato::NombreCategoriaVacio));
+        assert_eq!(
+            sist.clean_cat_name(&"".to_string()),
+            Err(ErroresContrato::NombreCategoriaVacio)
+        );
     }
 
     #[ink::test]
@@ -1828,7 +1902,6 @@ mod tests {
             expected.len(),
             "Se esperaba que los vectores tengan el mismo largo"
         );
-
     }
 
     ///Tests gestion orden
@@ -1837,17 +1910,39 @@ mod tests {
         let mut contrato = setup_sistema();
         let (id_comprador, id_vendedor) = build_testing_accounts();
 
-        contrato._registrar_usuario(id_comprador, "Juan comprador".to_string(), "comprador@gmail.com".to_string()).unwrap();
+        contrato
+            ._registrar_usuario(
+                id_comprador,
+                "Juan comprador".to_string(),
+                "comprador@gmail.com".to_string(),
+            )
+            .unwrap();
         contrato._asignar_rol(id_comprador, COMPRADOR).unwrap();
 
-        contrato._registrar_usuario(id_vendedor, "Usuario vendedor".to_string(), "vendedor@gmail.com".to_string()).unwrap();
+        contrato
+            ._registrar_usuario(
+                id_vendedor,
+                "Usuario vendedor".to_string(),
+                "vendedor@gmail.com".to_string(),
+            )
+            .unwrap();
         contrato._asignar_rol(id_vendedor, VENDEDOR).unwrap();
 
         contrato._registrar_categoria("Libros".to_string()).unwrap();
-        contrato._crear_producto(id_vendedor, "Rust Book".to_string(), "Desc libro".to_string(), "Libros".to_string(), 10).unwrap();
-        contrato._crear_publicacion(0, id_vendedor, 10, 100).unwrap();
+        contrato
+            ._crear_producto(
+                id_vendedor,
+                "Rust Book".to_string(),
+                "Desc libro".to_string(),
+                "Libros".to_string(),
+                10,
+            )
+            .unwrap();
+        contrato
+            ._crear_publicacion(0, id_vendedor, 10, 100)
+            .unwrap();
 
-        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(id_comprador);//setea el caller en Comprador
+        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(id_comprador); //setea el caller en Comprador
 
         let result = contrato.crear_orden(0, 2);
         assert!(result.is_ok(), "Error al crear la orden");
@@ -1863,34 +1958,81 @@ mod tests {
         let mut contrato = setup_sistema();
         let (comprador, vendedor) = build_testing_accounts();
 
-        contrato._registrar_usuario(vendedor, "Santiago vendedor".to_string(), "ST96@Gmail.com".to_string()).unwrap();
+        contrato
+            ._registrar_usuario(
+                vendedor,
+                "Santiago vendedor".to_string(),
+                "ST96@Gmail.com".to_string(),
+            )
+            .unwrap();
         contrato._asignar_rol(vendedor, VENDEDOR).unwrap();
 
-        contrato._registrar_usuario(comprador, "Juan comprador".to_string(), "JT11@Gmail.com".to_string()).unwrap();
+        contrato
+            ._registrar_usuario(
+                comprador,
+                "Juan comprador".to_string(),
+                "JT11@Gmail.com".to_string(),
+            )
+            .unwrap();
         contrato._asignar_rol(comprador, COMPRADOR).unwrap();
 
-        contrato._registrar_categoria("Electronica".to_string()).unwrap();
-        contrato._crear_producto(vendedor, "Auriculares".to_string(), "BT".to_string(), "Electronica".to_string(), 5).unwrap();
+        contrato
+            ._registrar_categoria("Electronica".to_string())
+            .unwrap();
+        contrato
+            ._crear_producto(
+                vendedor,
+                "Auriculares".to_string(),
+                "BT".to_string(),
+                "Electronica".to_string(),
+                5,
+            )
+            .unwrap();
         contrato._crear_publicacion(0, vendedor, 5, 250).unwrap();
 
         ink::env::test::set_caller::<ink::env::DefaultEnvironment>(comprador);
 
         let res = contrato.crear_orden(0, 0);
-        assert!(matches!(res, Err(ErroresContrato::CantidadEnCarritoMenorAUno)));
+        assert!(matches!(
+            res,
+            Err(ErroresContrato::CantidadEnCarritoMenorAUno)
+        ));
     }
 
     #[ink::test]
     fn test_crear_orden_sin_rol_comprador_fallido() {
         let mut contrato = setup_sistema();
-        let (no_comprador,vendedor) = build_testing_accounts();
+        let (no_comprador, vendedor) = build_testing_accounts();
 
-        contrato._registrar_usuario(vendedor,"Juan Vendedor".to_string(),"JT11@Gmail.com".to_string()).unwrap();
+        contrato
+            ._registrar_usuario(
+                vendedor,
+                "Juan Vendedor".to_string(),
+                "JT11@Gmail.com".to_string(),
+            )
+            .unwrap();
         contrato._asignar_rol(vendedor, VENDEDOR).unwrap();
 
-        contrato._registrar_usuario(no_comprador, "Santi No comprador".to_string(), "ST96@Gmail.com".to_string()).unwrap();
+        contrato
+            ._registrar_usuario(
+                no_comprador,
+                "Santi No comprador".to_string(),
+                "ST96@Gmail.com".to_string(),
+            )
+            .unwrap();
 
-        contrato._registrar_categoria("Una cat".to_string()).unwrap();
-        contrato._crear_producto(vendedor,"Nombre CAt".to_string(),"Aux".to_string(),"Una cat".to_string(),3).unwrap();
+        contrato
+            ._registrar_categoria("Una cat".to_string())
+            .unwrap();
+        contrato
+            ._crear_producto(
+                vendedor,
+                "Nombre CAt".to_string(),
+                "Aux".to_string(),
+                "Una cat".to_string(),
+                3,
+            )
+            .unwrap();
         contrato._crear_publicacion(0, vendedor, 3, 600).unwrap();
 
         ink::env::test::set_caller::<ink::env::DefaultEnvironment>(no_comprador);
@@ -1905,14 +2047,34 @@ mod tests {
         let (comprador, vendedor) = build_testing_accounts();
 
         // registrar usuarios y roles
-        contrato._registrar_usuario(vendedor, "Juan Vendedor".to_string(), "vendedor@mail.com".to_string()).unwrap();
-        contrato._asignar_rol(vendedor,VENDEDOR).unwrap();
-        contrato._registrar_usuario(comprador,"Santi Comprador".to_string(),"comprador@mail.com".to_string()).unwrap();
-        contrato._asignar_rol(comprador,COMPRADOR).unwrap();
+        contrato
+            ._registrar_usuario(
+                vendedor,
+                "Juan Vendedor".to_string(),
+                "vendedor@mail.com".to_string(),
+            )
+            .unwrap();
+        contrato._asignar_rol(vendedor, VENDEDOR).unwrap();
+        contrato
+            ._registrar_usuario(
+                comprador,
+                "Santi Comprador".to_string(),
+                "comprador@mail.com".to_string(),
+            )
+            .unwrap();
+        contrato._asignar_rol(comprador, COMPRADOR).unwrap();
 
         // Creo categoría, producto y publicación
         contrato._registrar_categoria("Juegos".to_string()).unwrap();
-        contrato._crear_producto(vendedor,"PS5".to_string(),"Sony".to_string(), "Juegos".to_string(), 3).unwrap();
+        contrato
+            ._crear_producto(
+                vendedor,
+                "PS5".to_string(),
+                "Sony".to_string(),
+                "Juegos".to_string(),
+                3,
+            )
+            .unwrap();
         contrato._crear_publicacion(0, vendedor, 3, 600).unwrap();
 
         // Creo orden como comprador
@@ -1937,14 +2099,30 @@ mod tests {
         let contrato_account = ink::env::test::callee::<ink::env::DefaultEnvironment>();
         ink::env::test::set_callee::<ink::env::DefaultEnvironment>(contrato_account);
 
-        contrato._registrar_usuario(vendedor, "Santiago".to_string(), "santi@mail.com".to_string()).unwrap();
+        contrato
+            ._registrar_usuario(
+                vendedor,
+                "Santiago".to_string(),
+                "santi@mail.com".to_string(),
+            )
+            .unwrap();
         contrato._asignar_rol(vendedor, VENDEDOR).unwrap();
 
-        contrato._registrar_usuario(comprador, "Juan".to_string(), "juan@mail.com".to_string()).unwrap();
+        contrato
+            ._registrar_usuario(comprador, "Juan".to_string(), "juan@mail.com".to_string())
+            .unwrap();
         contrato._asignar_rol(comprador, COMPRADOR).unwrap();
 
         contrato._registrar_categoria("Libros".to_string()).unwrap();
-        contrato._crear_producto(vendedor, "Rust".to_string(), "Desc".to_string(), "Libros".to_string(), 10).unwrap();
+        contrato
+            ._crear_producto(
+                vendedor,
+                "Rust".to_string(),
+                "Desc".to_string(),
+                "Libros".to_string(),
+                10,
+            )
+            .unwrap();
         contrato._crear_publicacion(0, vendedor, 10, 100).unwrap();
 
         ink::env::test::set_caller::<ink::env::DefaultEnvironment>(comprador);
@@ -1957,7 +2135,9 @@ mod tests {
         let mut contrato = setup_sistema();
         let vendedor = id_vendedor();
 
-        contrato._registrar_usuario(vendedor, "Ven".into(), "v@mail.com".to_string()).unwrap();
+        contrato
+            ._registrar_usuario(vendedor, "Ven".into(), "v@mail.com".to_string())
+            .unwrap();
         contrato._asignar_rol(vendedor, VENDEDOR).unwrap();
 
         ink::env::test::set_caller::<ink::env::DefaultEnvironment>(vendedor);
@@ -1967,6 +2147,36 @@ mod tests {
         assert!(matches!(res, Err(ErroresContrato::OrdenInexistente)));
     }
 
-    
-}
+    #[ink::test]
+    fn recibir_orden_enviada_exitoso() {
+        let mut contrato = setup_sistema();
+        let (comprador, vendedor) = build_testing_accounts();
 
+        // Registro usuarios y roles
+        contrato._registrar_usuario(vendedor, "Santiago".to_string(), "ST96@mail.com".to_string()).unwrap();
+        contrato._asignar_rol(vendedor, Rol::Vendedor).unwrap();
+        contrato._registrar_usuario(comprador, "Juan".to_string(), "JT11@mail.com".to_string()).unwrap();
+        contrato._asignar_rol(comprador, Rol::Comprador).unwrap();
+
+        //Creo publicación
+        contrato._registrar_categoria("Libros".to_string()).unwrap();
+        contrato._crear_producto(vendedor, "Rust".to_string(), "Desc".to_string(), "Libros".to_string(), 5).unwrap();
+        contrato._crear_publicacion(0, vendedor, 5, 100).unwrap();
+
+
+        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(comprador);
+        contrato.crear_orden(0, 1).unwrap();
+
+ 
+        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(vendedor);
+        contrato.enviar_producto(0).unwrap();
+
+
+        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(comprador);
+        let res = contrato.recibir_producto(0);
+
+        assert!(res.is_ok());
+        let orden = contrato.listar_ordenes()[0].clone();
+        assert_eq!(orden.get_status(), EstadoOrden::Recibida);
+    }
+}
