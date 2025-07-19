@@ -1287,8 +1287,6 @@ mod tests {
         );
     }
 
-
-}
     //_crear_producto
     //si el producto es exitoso (no duplicado y es vendedor)
     #[ink::test]
