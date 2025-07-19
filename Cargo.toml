@@ -2,7 +2,7 @@
 name = "marketplacedescentralizado"
 version = "0.1.0"
 authors = [
-    "[Agustin Mediotti] <[agustinmediotti@gmail.com]>, [Avila Tadeo] <[tadeo.i.avila@gmail.com]>, [Agustin Olthoff] <[agusoltghoff2002@gmail.com]>, [Juan Tettamanti] <[juan.tettamanti11@gmail.com]>",
+    "[Agustin Mediotti] <[agustinmediotti@gmail.com]>, [Avila Tadeo] <[tadeo.i.avila@gmail.com]>, [Agustin Olthoff] <[agusoltghoff2002@gmail.com]>, [Juan Tettamanti] <[juan.tettamanti11@gmail.com], [Simon Bierozko] <[simon.bierozko@gmail.com]>",
 ]
 edition = "2021"
 
@@ -22,8 +22,6 @@ path = "lib.rs"
 
 [features]
 default = ["std"]
-std = [
-    "ink/std",
-]
+std = ["ink/std"]
 ink-as-dependency = []
 e2e-tests = []
