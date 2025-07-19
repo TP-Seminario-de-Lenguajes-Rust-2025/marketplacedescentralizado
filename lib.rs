@@ -1844,7 +1844,7 @@ mod tests {
         contrato._asignar_rol(id_vendedor, VENDEDOR).unwrap();
 
         contrato._registrar_categoria("Libros".to_string()).unwrap();
-        contrato._crear_producto(id_vendedor, "Rust Book".to_string(), "Desc libro".to_string(), 0, 10).unwrap();
+        contrato._crear_producto(id_vendedor, "Rust Book".to_string(), "Desc libro".to_string(), "Libros".to_string(), 10).unwrap();
         contrato._crear_publicacion(0, id_vendedor, 10, 100).unwrap();
 
         ink::env::test::set_caller::<ink::env::DefaultEnvironment>(id_comprador);//setea el caller en Comprador
@@ -1870,7 +1870,7 @@ mod tests {
         contrato._asignar_rol(comprador, COMPRADOR).unwrap();
 
         contrato._registrar_categoria("Electronica".to_string()).unwrap();
-        contrato._crear_producto(vendedor, "Auriculares".to_string(), "BT".to_string(), 0, 5).unwrap();
+        contrato._crear_producto(vendedor, "Auriculares".to_string(), "BT".to_string(), "Electronica".to_string(), 5).unwrap();
         contrato._crear_publicacion(0, vendedor, 5, 250).unwrap();
 
         ink::env::test::set_caller::<ink::env::DefaultEnvironment>(comprador);
@@ -1890,7 +1890,7 @@ mod tests {
         contrato._registrar_usuario(no_comprador, "Santi No comprador".to_string(), "ST96@Gmail.com".to_string()).unwrap();
 
         contrato._registrar_categoria("Una cat".to_string()).unwrap();
-        contrato._crear_producto(vendedor,"Nombre CAt".to_string(),"Aux".to_string(),0,3).unwrap();
+        contrato._crear_producto(vendedor,"Nombre CAt".to_string(),"Aux".to_string(),"Una cat".to_string(),3).unwrap();
         contrato._crear_publicacion(0, vendedor, 3, 600).unwrap();
 
         ink::env::test::set_caller::<ink::env::DefaultEnvironment>(no_comprador);
@@ -1912,7 +1912,7 @@ mod tests {
 
         // Creo categoría, producto y publicación
         contrato._registrar_categoria("Juegos".to_string()).unwrap();
-        contrato._crear_producto(vendedor,"PS5".to_string(),"Sony".to_string(), 0, 3).unwrap();
+        contrato._crear_producto(vendedor,"PS5".to_string(),"Sony".to_string(), "Juegos".to_string(), 3).unwrap();
         contrato._crear_publicacion(0, vendedor, 3, 600).unwrap();
 
         // Creo orden como comprador
@@ -1944,7 +1944,7 @@ mod tests {
         contrato._asignar_rol(comprador, COMPRADOR).unwrap();
 
         contrato._registrar_categoria("Libros".to_string()).unwrap();
-        contrato._crear_producto(vendedor, "Rust".to_string(), "Desc".to_string(), 0, 10).unwrap();
+        contrato._crear_producto(vendedor, "Rust".to_string(), "Desc".to_string(), "Libros".to_string(), 10).unwrap();
         contrato._crear_publicacion(0, vendedor, 10, 100).unwrap();
 
         ink::env::test::set_caller::<ink::env::DefaultEnvironment>(comprador);
