@@ -21,6 +21,7 @@ mod contract {
         UsuarioNoEsComprador,
         UsuarioYaEsComprador,
         UsuarioYaEsVendedor,
+        UsuarioNoEsVendedor,
         UsuarioNoExiste,
         UsuarioNoTieneRol,
         OrdenNoPendiente,
@@ -44,6 +45,7 @@ mod contract {
         IndiceInvalido,
         AlreadyHasRol,
         CantidadEnCarritoMenorAUno,
+        ListaSinProductos,
     }
 
     pub trait GestionProducto {
@@ -442,7 +444,7 @@ mod contract {
                     return Err(ErroresContrato::ProductoYaExistente);
                 }
             } else {
-                return Err(ErroresContrato::UsuarioNoEsComprador);
+                return Err(ErroresContrato::UsuarioNoEsVendedor);
             }
         }
 
@@ -462,11 +464,11 @@ mod contract {
             id: u32,
             cantidad: u32,
         ) -> Result<(), ErroresContrato> {
-            let producto = self
+            let mut producto = self
                 .productos
                 .get(id)
                 .ok_or(ErroresContrato::ProductoInexistente)?; //misma duda que en get_id_vendedor
-            producto
+            producto.stock = producto
                 .stock
                 .checked_sub(cantidad)
                 .ok_or(ErroresContrato::StockProductoInsuficiente)?;
@@ -869,6 +871,7 @@ mod contract {
     ///Estructura de un producto
     #[cfg_attr(feature = "std", derive(ink::storage::traits::StorageLayout))]
     #[ink::scale_derive(Encode, Decode, TypeInfo)]
+    #[derive(PartialEq, Debug)]
     pub struct Producto {
         id: u32,
         id_vendedor: AccountId,
@@ -1034,6 +1037,7 @@ mod tests {
     use ink::{env::DefaultEnvironment, primitives::AccountId};
     use ink_e2e::{account_id, AccountKeyring};
 
+
     fn setup_sistema() -> Sistema {
         Sistema::new()
     }
@@ -1051,7 +1055,7 @@ mod tests {
         let id_vendedor = id_vendedor();
         (id_comprador, id_vendedor)
     }
-
+  
     fn build_testing_setup() -> (Sistema, AccountId, AccountId) {
         let mut app = setup_sistema();
         let (user_1, user_2) = build_testing_accounts();
@@ -1070,6 +1074,182 @@ mod tests {
         .expect("No se pudo registrar el usuario");
 
         (app, user_1, user_2)
+    }
+
+    //fn de test de agus olthoff
+
+    fn registrar_comprador(
+        sistema: &mut Sistema,
+        id: <DefaultEnvironment as ink::env::Environment>::AccountId,
+    ) {
+        sistema
+            ._registrar_usuario(id, "Comprador".into(), "comprador@gmail.com".into())
+            .unwrap();
+    }
+    fn registrar_vendedor(
+        sistema: &mut Sistema,
+        id: <DefaultEnvironment as ink::env::Environment>::AccountId,
+    ) {
+        sistema
+            ._registrar_usuario(id, "Vendedor".into(), "vendedor@gmail.com".into())
+            .unwrap();
+        sistema._asignar_rol(id, Rol::Vendedor).unwrap();
+    }
+
+    fn agregar_categoria(sistema: &mut Sistema, nombre: &str) {
+        sistema._registrar_categoria(nombre.into()).unwrap();
+    }
+
+    //_crear_producto
+    //si el producto es exitoso (no duplicado y es vendedor)
+    #[ink::test]
+    fn test_crear_producto_exitoso() {
+        let mut sistema = setup_sistema();
+        let id = id_vendedor();
+
+        registrar_vendedor(&mut sistema, id);
+        agregar_categoria(&mut sistema, "Ropa");
+
+        let res = sistema._crear_producto(id, "Zapatilla".into(), "desc".into(), "Ropa".into(), 10);
+
+        assert!(res.is_ok());
+
+        let productos = sistema._listar_productos();
+        assert_eq!(productos.len(), 1);
+
+        let esperado = Producto::new(0, id, "Zapatilla".into(), "desc".into(), 0, 10);
+        assert_eq!(productos[0], esperado);
+    }
+
+    //test falla por que el producto esta duplicado
+    #[ink::test]
+    fn test_crear_producto_falla_si_ya_esxiste() {
+        let mut sistema = setup_sistema();
+        let id = id_vendedor();
+
+        registrar_vendedor(&mut sistema, id);
+        agregar_categoria(&mut sistema, "Ropa");
+
+        let res = sistema._crear_producto(id, "Zapatilla".into(), "desc".into(), "Ropa".into(), 10);
+        assert!(res.is_ok());
+
+        let res2 =
+            sistema._crear_producto(id, "Zapatilla".into(), "desc".into(), "Ropa".into(), 10);
+        assert!(res2.is_err());
+        assert_eq!(res2.unwrap_err(), ErroresContrato::ProductoYaExistente);
+    }
+    //test falla por que el usuario no es vendedor
+    #[ink::test]
+    fn test_crear_producto_falla_si_es_comprador() {
+        let mut sistema = setup_sistema();
+        let id = id_comprador();
+
+        registrar_comprador(&mut sistema, id);
+        agregar_categoria(&mut sistema, "Ropa");
+
+        let res = sistema._crear_producto(id, "Zapatilla".into(), "desc".into(), "Ropa".into(), 10);
+        assert!(res.is_err());
+        assert_eq!(res.unwrap_err(), ErroresContrato::UsuarioNoEsVendedor);
+    }
+
+    //producto_existe (caso existente)
+    #[ink::test]
+    fn test_producto_existe() {
+        let mut sistema = setup_sistema();
+        let id = id_vendedor();
+
+        registrar_vendedor(&mut sistema, id);
+        agregar_categoria(&mut sistema, "Ropa");
+
+        let _ = sistema._crear_producto(id, "Zapatilla".into(), "desc".into(), "Ropa".into(), 10);
+
+        // Armamos el producto igual al creado
+        let producto = Producto::new(0, id, "Zapatilla".into(), "desc".into(), 0, 10);
+
+        let existe = sistema.producto_existe(&producto);
+        assert!(existe);
+    }
+    //producto_existe (caso inexistente)
+    #[ink::test]
+    fn test_producto_no_existe() {
+        let sistema = setup_sistema();
+        let id = id_vendedor();
+        let producto = Producto::new(0, id, "Zapatilla".into(), "desc".into(), 0, 10);
+
+        let existe = sistema.producto_existe(&producto);
+        assert!(!existe);
+    }
+
+    // descontar_stock_producto (caso exitoso)
+    #[ink::test]
+    fn test_descontar_stock_producto_exitoso() {
+        let mut sistema = setup_sistema();
+        let id = id_vendedor();
+
+        registrar_vendedor(&mut sistema, id);
+        agregar_categoria(&mut sistema, "Ropa");
+
+        sistema
+            ._crear_producto(id, "Zapatilla".into(), "desc".into(), "Ropa".into(), 10)
+            .unwrap();
+        let res = sistema.descontar_stock_producto(0, 3);
+        assert!(res.is_ok());
+
+        let productos = sistema._listar_productos();
+        let esperado = Producto::new(0, id, "Zapatilla".into(), "desc".into(), 0, 7);
+        assert_eq!(productos[0], esperado);
+    }
+    // descontar_stock_producto (caso falla producto inexistente)
+    #[ink::test]
+    fn test_descontar_stock_falla_producto_inexistente() {
+        let mut sistema = setup_sistema();
+        let res = sistema.descontar_stock_producto(0, 1);
+        assert!(res.is_err());
+        assert_eq!(res.unwrap_err(), ErroresContrato::ProductoInexistente);
+    }
+    // descontar_stock_producto (caso falla stock insuficiente)
+    #[ink::test]
+    fn test_descontar_stock_falla_stock_insuficiente() {
+        let mut sistema = setup_sistema();
+        let id = id_vendedor();
+
+        registrar_vendedor(&mut sistema, id);
+        agregar_categoria(&mut sistema, "Ropa");
+
+        sistema
+            ._crear_producto(id, "Zapatilla".into(), "desc".into(), "Ropa".into(), 5)
+            .unwrap();
+
+        // descuento mas stock de lo que tengo
+        let res = sistema.descontar_stock_producto(0, 10);
+        assert!(res.is_err());
+        assert_eq!(res.unwrap_err(), ErroresContrato::StockProductoInsuficiente);
+    }
+    #[ink::test]
+    fn test_listar_productos_con_productos() {
+        let mut sistema = setup_sistema();
+        let id = id_vendedor();
+
+        registrar_vendedor(&mut sistema, id);
+        agregar_categoria(&mut sistema, "Ropa");
+
+        sistema
+            ._crear_producto(id, "Zapatilla".into(), "desc".into(), "Ropa".into(), 10)
+            .unwrap();
+
+        let productos = sistema._listar_productos();
+        assert_eq!(productos.len(), 1);
+
+        let esperado = Producto::new(0, id, "Zapatilla".into(), "desc".into(), 0, 10);
+        assert_eq!(productos[0], esperado); //modificado
+    }
+    /// Test para listar productos sin productos registrado
+    #[ink::test]
+    fn test_listar_productos_sin_productos() {
+        let sistema = setup_sistema();
+
+        let res = sistema._listar_productos();
+        assert!(res.is_empty());
     }
 
     #[ink::test]
@@ -1183,5 +1363,6 @@ mod tests {
             expected.len(),
             "Se esperaba que los vectores tengan el mismo largo"
         );
+
     }
 }
