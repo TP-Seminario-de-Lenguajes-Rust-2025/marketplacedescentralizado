@@ -47,7 +47,7 @@ mod contract {
         AlreadyHasRol,
         CantidadEnCarritoMenorAUno,
         NombreCategoriaVacio,
-        MaxCategoriasAlcanzado
+        MaxCategoriasAlcanzado,
         ListaSinProductos,
     }
 
