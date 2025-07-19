@@ -768,7 +768,7 @@ mod contract {
         }
 
         fn clean_cat_name(&self, nombre: &String) -> Result<String,ErroresContrato> {
-            let mut limpio = nombre.to_lowercase().trim().to_string();
+            let mut limpio = String::from(nombre.to_lowercase().trim());
             limpio.truncate(100);
             if !limpio.is_empty(){
                 Ok(limpio)
