@@ -21,4 +21,3 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           slug: TP-Seminario-de-Lenguajes-Rust-2025/marketplacedescentralizado
-          fail_if_error: true
