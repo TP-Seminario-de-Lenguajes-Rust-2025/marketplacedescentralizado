@@ -1250,7 +1250,7 @@ mod tests {
 
         let res = sistema._listar_productos();
         assert!(res.is_empty());
-
+    }
 
     #[ink::test]
     fn registra_usuario_correctamente() {
