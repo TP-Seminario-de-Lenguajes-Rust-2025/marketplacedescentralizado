@@ -15,6 +15,7 @@ mod contract {
 
     #[ink::scale_derive(Encode, Decode, TypeInfo)]
     #[derive(Debug, PartialEq)]
+
     pub enum ErroresContrato {
         UsuarioSinRoles,
         UsuarioYaExistente,
@@ -45,6 +46,8 @@ mod contract {
         IndiceInvalido,
         AlreadyHasRol,
         CantidadEnCarritoMenorAUno,
+        NombreCategoriaVacio,
+        MaxCategoriasAlcanzado,
         ListaSinProductos,
     }
 
@@ -134,34 +137,34 @@ mod contract {
 
         fn get_categoria_by_name(&self, nombre: &String) -> Result<u32, ErroresContrato>;
 
-        fn clean_cat_name(&self, nombre: &String) -> String;
+        fn clean_cat_name(&self, nombre: &String) -> Result<String,ErroresContrato>;
     }
 
-    pub trait ControlStock {
-        fn get_cantidad(&self) -> u32;
+    // pub trait ControlStock {
+    //     fn get_cantidad(&self) -> u32;
 
-        fn set_cantidad(&mut self, nueva: u32);
+    //     fn set_cantidad(&mut self, nueva: u32);
 
-        fn descontar_stock(&mut self, cantidad_a_descontar: u32) -> Result<(), ErroresContrato> {
-            //self.chequear_stock_disponible(cantidad_a_descontar)?;
-            let nueva_cantidad = self
-                .get_cantidad()
-                .checked_sub(cantidad_a_descontar)
-                .ok_or(ErroresContrato::StockInsuficiente)?;
-            self.set_cantidad(nueva_cantidad);
-            Ok(())
-        }
+    //     fn descontar_stock(&mut self, cantidad_a_descontar: u32) -> Result<(), ErroresContrato> {
+    //         //self.chequear_stock_disponible(cantidad_a_descontar)?;
+    //         let nueva_cantidad = self
+    //             .get_cantidad()
+    //             .checked_sub(cantidad_a_descontar)
+    //             .ok_or(ErroresContrato::StockInsuficiente)?;
+    //         self.set_cantidad(nueva_cantidad);
+    //         Ok(())
+    //     }
 
-        // fn chequear_stock_disponible(
-        //     &self,
-        //     cantidad_a_descontar: u32,
-        // ) -> Result<(), ErroresContrato> {
-        //     if self.get_cantidad() < cantidad_a_descontar {
-        //         return Err(ErroresContrato::SinStockDisponible);
-        //     }
-        //     Ok(())
-        // }
-    }
+    //     // fn chequear_stock_disponible(
+    //     //     &self,
+    //     //     cantidad_a_descontar: u32,
+    //     // ) -> Result<(), ErroresContrato> {
+    //     //     if self.get_cantidad() < cantidad_a_descontar {
+    //     //         return Err(ErroresContrato::SinStockDisponible);
+    //     //     }
+    //     //     Ok(())
+    //     // }
+    // }
 
     ///Estructura principal del contrato
     #[ink(storage)]
@@ -693,11 +696,11 @@ mod contract {
             cantidad: u32,
         ) -> Result<(), ErroresContrato> {
             //let index = id_pub.checked_sub(1).ok_or(ErroresContrato::ErrorComun)?;
-            let publicacion = self
+            let mut publicacion = self
                 .publicaciones
                 .get(id_pub)
                 .ok_or(ErroresContrato::PublicacionNoExiste)?;
-            publicacion
+            publicacion.stock = publicacion
                 .stock
                 .checked_sub(cantidad)
                 .ok_or(ErroresContrato::StockPublicacionInsuficiente)?;
@@ -732,8 +735,11 @@ mod contract {
             }
 
             // Agregar categoria
+            if self.categorias.len() == u32::MAX{
+                return Err(ErroresContrato::MaxCategoriasAlcanzado)
+            }
             let id = self.categorias.len();
-            let nueva_categoria = Categoria::new(id, self.clean_cat_name(&nombre));
+            let nueva_categoria = Categoria::new(id, self.clean_cat_name(&nombre)?);
             self.categorias.push(&nueva_categoria);
 
             Ok(String::from("la categoria fue registrada correctamente"))
@@ -750,7 +756,7 @@ mod contract {
         }
 
         fn get_categoria_by_name(&self, nombre: &String) -> Result<u32, ErroresContrato> {
-            let nombre_limpio = self.clean_cat_name(nombre);
+            let nombre_limpio = self.clean_cat_name(nombre)?;
             for i in 0..self.categorias.len() {
                 if let Some(categoria) = self.categorias.get(i) {
                     if categoria.nombre == nombre_limpio {
@@ -761,8 +767,12 @@ mod contract {
             Err(ErroresContrato::CategoriaInexistente)
         }
 
-        fn clean_cat_name(&self, nombre: &String) -> String {
-            String::from(nombre.to_lowercase().trim())
+        fn clean_cat_name(&self, nombre: &String) -> Result<String,ErroresContrato> {
+            let mut limpio = nombre.to_lowercase().trim().to_string();
+            limpio.truncate(100);
+            if !limpio.is_empty(){
+                Ok(limpio)
+            }else{Err(ErroresContrato::NombreCategoriaVacio)}
         }
     }
 
@@ -911,15 +921,15 @@ mod contract {
         }
     }
 
-    impl ControlStock for Producto {
-        fn get_cantidad(&self) -> u32 {
-            self.stock
-        }
+    // impl ControlStock for Producto {
+    //     fn get_cantidad(&self) -> u32 {
+    //         self.stock
+    //     }
 
-        fn set_cantidad(&mut self, nueva: u32) {
-            self.stock = nueva;
-        }
-    }
+    //     fn set_cantidad(&mut self, nueva: u32) {
+    //         self.stock = nueva;
+    //     }
+    // }
 
     ///LOGICA DE PUBLICACION
 
@@ -964,15 +974,15 @@ mod contract {
         }
     }
 
-    impl ControlStock for Publicacion {
-        fn get_cantidad(&self) -> u32 {
-            self.stock
-        }
+    // impl ControlStock for Publicacion {
+    //     fn get_cantidad(&self) -> u32 {
+    //         self.stock
+    //     }
 
-        fn set_cantidad(&mut self, nueva: u32) {
-            self.stock = nueva;
-        }
-    }
+    //     fn set_cantidad(&mut self, nueva: u32) {
+    //         self.stock = nueva;
+    //     }
+    // }
 
     ///Estructuras y logica de Orden
     ///Posibles estados de una Ordem
@@ -1034,14 +1044,14 @@ mod contract {
 #[cfg(test)]
 mod tests {
     use crate::contract::*;
-    use ink::{env::DefaultEnvironment, primitives::AccountId};
+
+    use ink::{env::{test::set_callee, DefaultEnvironment}, primitives::AccountId};
     use ink_e2e::{account_id, AccountKeyring};
-
-
+  
     fn setup_sistema() -> Sistema {
         Sistema::new()
     }
-
+  
     fn id_comprador() -> <DefaultEnvironment as ink::env::Environment>::AccountId {
         account_id(AccountKeyring::Alice)
     }
@@ -1075,7 +1085,7 @@ mod tests {
 
         (app, user_1, user_2)
     }
-
+  
     //fn de test de agus olthoff
 
     fn registrar_comprador(
@@ -1098,6 +1108,183 @@ mod tests {
 
     fn agregar_categoria(sistema: &mut Sistema, nombre: &str) {
         sistema._registrar_categoria(nombre.into()).unwrap();
+    }
+
+
+
+    fn contrato_con_categorias_cargada() -> Sistema{
+        let mut sist = Sistema::new();
+        for i in 0..10{
+            sist._registrar_categoria(String::from(format!("categoria {}",i)));
+        }
+        return sist
+    }
+
+    #[ink::test]
+    fn test_categoria_agregar_nueva() {
+        let mut sist = setup_sistema();
+
+        assert!(sist._listar_categorias().is_empty());
+
+        let result = sist._registrar_categoria("Limpieza".to_string());
+
+        assert_eq!(result, Ok(String::from("la categoria fue registrada correctamente")));
+        assert_eq!(sist._listar_categorias().len(), 1);
+    }
+
+    #[ink::test]
+    fn test_categoria_agregar_duplicada() {
+        let mut sist = contrato_con_categorias_cargada();
+
+        assert!(!sist._listar_categorias().is_empty());
+        let result = sist._registrar_categoria("categoria 1".to_string());
+        assert_eq!(result, Err(ErroresContrato::CategoriaYaExistente), "deberia tirar error que ya existe la categoria");
+    }
+
+    #[ink::test]
+    fn test_categoria_formateo_nombre() {
+        let mut sist = contrato_con_categorias_cargada();
+
+        //nombre similar
+        let result = sist._registrar_categoria("CaTEgORia 1".to_string());
+        assert_eq!(result, Err(ErroresContrato::CategoriaYaExistente),"deberia devolver que ya existe la categoria");
+
+        //nombre vacio
+        let result = sist._registrar_categoria(String::new());
+        assert_eq!(result, Err(ErroresContrato::NombreCategoriaVacio), "deberia devolver que el nombre de la categoria esta vacia");
+
+
+        //nombres con unicode
+        let result = sist._registrar_categoria("не ваше дела идите на хуй".to_string());
+        assert_eq!(result, Ok(String::from("la categoria fue registrada correctamente")),"deberia poder manejar alfabeto cirilico");
+        let result = sist._registrar_categoria("የክፋት እቅድ".to_string());
+        assert_eq!(result, Ok(String::from("la categoria fue registrada correctamente")),"deberia poder manejar alfabeto amharico");
+        let result = sist._registrar_categoria("プログラミングが好きです".to_string());
+        assert_eq!(result, Ok(String::from("la categoria fue registrada correctamente")),"deberia poder manejar kanji, katakana e hiragana");
+        let result = sist._registrar_categoria("사랑해요".to_string());
+        assert_eq!(result, Ok(String::from("la categoria fue registrada correctamente")),"deberia poder manejar hangul");
+
+
+        //nombre con leading y trailing whitespace
+        let result = sist._registrar_categoria("          alguna categoria                                                ".to_string());
+        assert_eq!(result, Ok(String::from("la categoria fue registrada correctamente")),"deberia eliminar espacios en blanco al principio y final del string");
+
+        //nombre truncado
+
+        let result = sist._registrar_categoria(
+            "You know what they call a  Quarter Pounder with Cheese in Paris?
+
+            [JULES]
+            They don't call it a Quarter Pounder with Cheese?
+
+            [VINCENT]
+            No, they got the metric system there, they wouldn't know what the fuck a Quarter Pounder is.
+
+            [JULES]
+            Then what do they call it?
+
+            [VINCENT]
+            They call it Royale with Cheese.
+
+            [JULES]
+            Royale with Cheese. What do they call a Big Mac?
+
+            [VINCENT]
+            Big Mac's a Big Mac, but they call it Le Big Mac.
+
+            [JULES]
+            Le big Mac! Ahhaha, what do they call a Whopper?
+
+            [VINCENT]
+            I dunno, I didn't go into a Burger King.".to_string()
+        );
+        assert_eq!(result, Ok(String::from("la categoria fue registrada correctamente")),"deberia poder manejar nombres muy largos, truncandolos en 100 caracteres");
+    }
+
+
+
+    #[ink::test]
+    fn test_categoria_indice_correcto_por_nombre() {
+        let sist = contrato_con_categorias_cargada();
+        assert_eq!(sist.get_categoria_by_name(&"categoria 9".to_string()),Ok(9),"deberia devolver el indice correcto");
+        assert_eq!(sist.get_categoria_by_name(&"categoria 3".to_string()),Ok(3),"deberia devolver el indice correcto");
+        assert_eq!(sist.get_categoria_by_name(&"      categoria 4       ".to_string()),Ok(4),"deberia devolver el indice correcto incluso con whitespace");
+        assert_eq!(sist.get_categoria_by_name(&"cAtEGoRiA 5".to_string()),Ok(5),"deberia devolver el indice correcto incluso con mayusculas");
+
+        assert_eq!(sist.get_categoria_by_name(&"Electrodomesticos".to_string()),Err(ErroresContrato::CategoriaInexistente),"deberia devolver que no encuentra la categoria");
+    }
+
+    #[ink::test]
+    fn test_categoria_get_categoria_whitespaces() {
+        let sist = contrato_con_categorias_cargada();
+        assert_eq!(sist.get_categoria_by_name(&"      categoria 4       ".to_string()),Ok(4),"deberia devolver el indice correcto incluso con whitespace");
+    }
+
+    #[ink::test]
+    fn test_categoria_get_categoria_case_sensitivity() {
+        let sist = contrato_con_categorias_cargada();
+        assert_eq!(sist.get_categoria_by_name(&"cAtEGoRiA 5".to_string()),Ok(5),"deberia devolver el indice correcto incluso con mayusculas");
+    }
+
+    #[ink::test]
+    fn test_categoria_get_categoria_inexistente() {
+        let sist = contrato_con_categorias_cargada();
+        assert_eq!(sist.get_categoria_by_name(&"Electrodomesticos".to_string()),Err(ErroresContrato::CategoriaInexistente),"deberia devolver que no encuentra la categoria");
+    }
+
+    #[ink::test]
+    fn test_categoria_clean_name() {
+        let sist = setup_sistema();
+        assert_eq!(sist.clean_cat_name(&"Electrodomésticos".to_string()),Ok("electrodomésticos".to_string()));
+    }
+
+    #[ink::test]
+    fn test_categoria_clean_name_whitespaces() {
+        let sist = setup_sistema();
+        assert_eq!(sist.clean_cat_name(&"      cocina        ".to_string()),Ok("cocina".to_string()));
+    }
+
+    #[ink::test]
+    fn test_categoria_clean_name_empty() {
+        let sist = setup_sistema();
+        assert_eq!(sist.clean_cat_name(&"".to_string()),Err(ErroresContrato::NombreCategoriaVacio));
+    }
+
+    #[ink::test]
+    fn test_categoria_clean_name_max_characters() {
+        let sist = setup_sistema();
+        assert_eq!(sist.clean_cat_name(&"
+            You know what they call a  Quarter Pounder with Cheese in Paris?
+
+            [JULES]
+            They don't call it a Quarter Pounder with Cheese?
+
+            [VINCENT]
+            No, they got the metric system there, they wouldn't know what the fuck a Quarter Pounder is.
+
+            [JULES]
+            Then what do they call it?
+
+            [VINCENT]
+            They call it Royale with Cheese.
+
+            [JULES]
+            Royale with Cheese. What do they call a Big Mac?
+
+            [VINCENT]
+            Big Mac's a Big Mac, but they call it Le Big Mac.
+
+            [JULES]
+            Le big Mac! Ahhaha, what do they call a Whopper?
+
+            [VINCENT]
+            I dunno, I didn't go into a Burger King.".to_string()
+        ),
+            Ok("you know what they call a  quarter pounder with cheese in paris?
+
+            [jules]
+            th".to_string())
+        );
     }
 
     //_crear_producto
@@ -1366,3 +1553,4 @@ mod tests {
 
     }
 }
+
