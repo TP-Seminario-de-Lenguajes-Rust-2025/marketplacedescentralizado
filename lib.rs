@@ -377,7 +377,18 @@ mod contract {
         //     Ok(String::from("La orden fue cancelada correctamente"))
         // }
 
-        ///FALTA DOCUMENTAR PARA ROL
+        ///Asigna un rol al usuario correspondiente al AccountId que lo envía
+        ///
+        /// # Parámetros
+        /// - `rol`: rol a agregar
+        ///
+        /// # Requisitos
+        /// - El caller debe estar registrado
+        ///
+        /// # Errores
+        /// - `AlreadyHasRol` si el usuario ya tiene el rol solicitado
+        /// - `UsuarioNoExiste` si el caller no es un usuario registrado
+        ///
         #[ink(message)]
         pub fn asignar_rol(&mut self, rol: Rol) -> Result<String, ErroresContrato> {
             self._asignar_rol(self.env().caller(), rol)
