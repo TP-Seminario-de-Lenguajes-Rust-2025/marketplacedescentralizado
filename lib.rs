@@ -377,7 +377,18 @@ mod contract {
         //     Ok(String::from("La orden fue cancelada correctamente"))
         // }
 
-        ///FALTA DOCUMENTAR PARA ROL
+        ///Asigna un rol al usuario correspondiente al AccountId que lo envía
+        ///
+        /// # Parámetros
+        /// - `rol`: rol a agregar
+        ///
+        /// # Requisitos
+        /// - El caller debe estar registrado
+        ///
+        /// # Errores
+        /// - `AlreadyHasRol` si el usuario ya tiene el rol solicitado
+        /// - `UsuarioNoExiste` si el caller no es un usuario registrado
+        ///
         #[ink(message)]
         pub fn asignar_rol(&mut self, rol: Rol) -> Result<String, ErroresContrato> {
             self._asignar_rol(self.env().caller(), rol)
@@ -672,7 +683,7 @@ mod contract {
             let usuario = self.get_user(&id_usuario)?;
             if usuario.has_role(VENDEDOR) {
                 self.descontar_stock_producto(id_producto, stock)?;
-                let p = Publicacion::new(id, id_producto, id_usuario, stock, precio);
+                let p = Publicacion::new(id, id_producto, id_usuario, stock, precio); // precio o precio unitario?
                 self.publicaciones.push(&p);
                 Ok(())
             } else {
@@ -718,7 +729,7 @@ mod contract {
             }
         }
 
-        /// Recibe un ID de una publicacion y devuelve su stock
+        /// Recibe un ID de una publicacion y devuelve el precio unitario
         fn get_precio_unitario(&self, id_pub: u32) -> Result<Balance, ErroresContrato> {
             if let Some(publicacion) = self.publicaciones.get(id_pub) {
                 Ok(publicacion.precio_unitario)
