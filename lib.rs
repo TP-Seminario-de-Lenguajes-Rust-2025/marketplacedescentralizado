@@ -17,6 +17,9 @@ mod contract {
     #[derive(Debug, PartialEq)]
 
     pub enum ErroresContrato {
+        DatosInvalidos, //nombre o descripcion vacios 
+        PrecioInvalido, //precio es  <= 0
+        StockInvalido, //Stock es <= 0
         UsuarioSinRoles,
         UsuarioYaExistente,
         UsuarioNoEsComprador,
@@ -446,6 +449,15 @@ mod contract {
             categoria: String,
             stock: u32,
         ) -> Result<(), ErroresContrato> {
+            // 1. valido que el nombre y descripcion no sean vacias
+            if nombre.trim().is_empty() || descripcion.trim().is_empty() {
+                return Err(ErroresContrato::DatosInvalidos);
+            }
+            // 2. valido que el stock no sea 0
+            if stock == 0 {
+                return Err(ErroresContrato::StockInvalido);
+            }
+
             let id = self.productos.len();
             let usuario = self.get_user(&id_vendedor)?;
             if usuario.has_role(VENDEDOR) {
@@ -679,6 +691,15 @@ mod contract {
             stock: u32,
             precio: Balance,
         ) -> Result<(), ErroresContrato> {
+            // 1. valido que el stock no sea 0unidades
+            if stock == 0 {
+                return Err(ErroresContrato::StockInvalido);
+            }
+            // 2. valido que el precio no sea $0
+            if precio == 0 {
+                return Err(ErroresContrato::PrecioInvalido);
+            }
+
             let id = self.publicaciones.len();
             let usuario = self.get_user(&id_usuario)?;
             if usuario.has_role(VENDEDOR) {
@@ -738,7 +759,6 @@ mod contract {
             }
         }
     }
-
     impl GestionCategoria for Sistema {
         fn _registrar_categoria(&mut self, nombre: String) -> Result<String, ErroresContrato> {
             if self.get_categoria_by_name(&nombre).is_ok() {
@@ -2189,5 +2209,51 @@ mod tests {
         assert!(res.is_ok());
         let orden = contrato.listar_ordenes()[0].clone();
         assert_eq!(orden.get_status(), EstadoOrden::Recibida);
+    }
+    #[ink::test]
+    fn test_crear_producto_falla_datos_invalidos() {
+        let mut sistema = setup_sistema();
+        let id = id_vendedor();
+        registrar_vendedor(&mut sistema, id);
+        agregar_categoria(&mut sistema, "Ropa");
+
+        // nombre vacio
+        let res_nombre = sistema._crear_producto(id, "".into(), "desc".into(), "Ropa".into(), 10);
+        assert_eq!(res_nombre, Err(ErroresContrato::DatosInvalidos));
+
+        // descripcion vacia
+        let res_desc = sistema._crear_producto(id, "Valid".into(), "   ".into(), "Ropa".into(), 10);
+        assert_eq!(res_desc, Err(ErroresContrato::DatosInvalidos));
+    }
+
+    #[ink::test]
+    fn test_crear_producto_falla_stock_cero() {
+        let mut sistema = setup_sistema();
+        let id = id_vendedor();
+        registrar_vendedor(&mut sistema, id);
+        agregar_categoria(&mut sistema, "Ropa");
+
+        // stock 0
+        let res = sistema._crear_producto(id, "Valid".into(), "desc".into(), "Ropa".into(), 0);
+        assert_eq!(res, Err(ErroresContrato::StockInvalido));
+    }
+
+    #[ink::test]
+    fn test_crear_publicacion_falla_valores_cero() {
+        let mut sistema = setup_sistema();
+        let id = id_vendedor();
+        registrar_vendedor(&mut sistema, id);
+        agregar_categoria(&mut sistema, "Ropa");
+        
+        // creo producto valido con 100 unidades
+        sistema._crear_producto(id, "Prod".into(), "D".into(), "Ropa".into(), 100).unwrap();
+
+        // publico con precio = $0
+        let res_precio = sistema._crear_publicacion(0, id, 10, 0);
+        assert_eq!(res_precio, Err(ErroresContrato::PrecioInvalido));
+
+        // publico con stock = 0
+        let res_stock = sistema._crear_publicacion(0, id, 0, 100);
+        assert_eq!(res_stock, Err(ErroresContrato::StockInvalido));
     }
 }
