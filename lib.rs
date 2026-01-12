@@ -395,7 +395,7 @@ mod contract {
         ///
         #[ink(message)]
         pub fn asignar_rol(&mut self, rol: Rol) -> Result<String, ErroresContrato> {
-            self._asignar_rol(self.env().caller(), rol)
+            self._asignar_rol(self.env().caller(), rol)?
         }
 
         /// Devuelve una lista de todos los usuarios registrados en el contrato.
@@ -532,7 +532,7 @@ mod contract {
 
             // Instancio nuevo usuario
             let usuario = Usuario::new(id, nombre, mail);
-            self._asignar_rol(id, rol);
+            self._asignar_rol(id, rol)?;
 
 
             // Inserto el usuario tanto en el Mapping como en el Vec
@@ -1952,7 +1952,10 @@ mod tests {
             Err(ErroresContrato::AlreadyHasRol),
             "Se esperaba error AlreadyHasRol si el usuario ya tiene el rol asignado"
         );
+    }
 
+    #[ink::test]
+    fn asigna_ambos_roles_correctamente(){
         let (mut app, user_id_comprador, user_id_vendedor) = build_testing_setup();
         
         assert!(
@@ -2234,7 +2237,8 @@ mod tests {
 
         // No hay orden 99
         let res = contrato.enviar_producto(99);
-        assert!(matches!(res, Err(ErroresContrato::OrdenInexistente)));
+        assert_eq!(res, Err(ErroresContrato::OrdenInexistente));
+        //assert!(matches!(res, Err(ErroresContrato::OrdenInexistente)));
     }
 
     #[ink::test]
