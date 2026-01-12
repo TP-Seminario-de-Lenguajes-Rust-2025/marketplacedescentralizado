@@ -431,10 +431,10 @@ mod contract {
         /// - `UsuarioSinRoles` si el caller no tiene el rol adecuado.
         /// - `ProductoInexistente` si el producto no existe.
         #[ink(message)]
-        pub fn listar_publicaciones_propias(&self) -> Vec<Publicacion> {
+        pub fn listar_publicaciones_propias(&self) -> Result<Vec<Publicacion>, ErroresContrato> {
             let id = self.env().caller();
             self._usuario_con_rol(VENDEDOR)?;
-            self._listar_publicaciones_propias(id);
+            self._listar_publicaciones_propias(id)
         }
 
         /// Devuelve una lista de todas las ordenes de compra registradas en el contrato.
