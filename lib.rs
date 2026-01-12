@@ -49,6 +49,8 @@ mod contract {
         NombreCategoriaVacio,
         MaxCategoriasAlcanzado,
         ListaSinProductos,
+        NombreUsuarioVacio,
+        MailUsuarioVacio,
     }
 
     pub trait GestionProducto {
@@ -213,9 +215,10 @@ mod contract {
             &mut self,
             nombre: String,
             mail: String,
+            rol: Rol,
         ) -> Result<String, ErroresContrato> {
             let id = self.env().caller();
-            self._registrar_usuario(id, nombre, mail)
+            self._registrar_usuario(id, nombre, mail, rol)
         }
 
         /// Registra un nuevo producto en el contrato, asignándolo al AccountId que lo publica.
@@ -507,7 +510,16 @@ mod contract {
             id: AccountId,
             nombre: String,
             mail: String,
+            rol: Rol,
         ) -> Result<String, ErroresContrato> {
+            //Verifico que el usuario, y mail no esten vacios
+            if nombre.is_empty(){
+                return Err(ErroresContrato::NombreUsuarioVacio);
+            }
+            if mail.is_empty(){
+                return Err(ErroresContrato::MailUsuarioVacio);
+            }
+            
             // Verifico que el usuario y el mail no existan
             if self.get_user(&id).is_ok() {
                 return Err(ErroresContrato::UsuarioYaExistente);
@@ -519,6 +531,8 @@ mod contract {
 
             // Instancio nuevo usuario
             let usuario = Usuario::new(id, nombre, mail);
+            usuario._asignar_rol(rol);
+
 
             // Inserto el usuario tanto en el Mapping como en el Vec
             self.m_usuarios.insert(id, &usuario);
@@ -567,6 +581,15 @@ mod contract {
 
         fn _asignar_rol(&mut self, id: AccountId, rol: Rol) -> Result<String, ErroresContrato> {
             let mut usuario = self.get_user(&id)?;
+            if rol==Rol::Ambos{
+                let rol1:Result<String, ErroresContrato> = self._asignar_rol(id, Rol::Vendedor);
+                let rol2:Result<String, ErroresContrato> = self._asignar_rol(id, Rol::Comprador);
+                if (rol1.is_ok()||rol2.is_ok()){
+                    return Ok(String::from("roles agregados correctamente"));
+                }else{
+                    return Err(ErroresContrato::AlreadyHasRol);
+                }
+            }
             if usuario.has_role(rol.clone()) {
                 return Err(ErroresContrato::AlreadyHasRol);
             }
@@ -798,6 +821,7 @@ mod contract {
     pub enum Rol {
         Comprador,
         Vendedor,
+        Ambos,
     }
 
     /// Estructura que define al Usuario
@@ -1099,12 +1123,14 @@ mod tests {
             user_1,
             "user_name_1".to_string(),
             "user_email_1".to_string(),
+            rol::Comprador,
         )
         .expect("No se pudo registrar el usuario");
         app._registrar_usuario(
             user_2,
             "user_name_2".to_string(),
             "user_email_2".to_string(),
+            rol::Vendedor,
         )
         .expect("No se pudo registrar el usuario");
 
@@ -1113,12 +1139,12 @@ mod tests {
 
     //fn de test de agus olthoff
 
-    fn registrar_comprador(
+    fn registrar_comprador( 
         sistema: &mut Sistema,
         id: <DefaultEnvironment as ink::env::Environment>::AccountId,
     ) {
         sistema
-            ._registrar_usuario(id, "Comprador".into(), "comprador@gmail.com".into())
+            ._registrar_usuario(id, "Comprador".into(), "comprador@gmail.com".into(), Rol::Comprador)
             .unwrap();
     }
     fn registrar_vendedor(
@@ -1126,10 +1152,18 @@ mod tests {
         id: <DefaultEnvironment as ink::env::Environment>::AccountId,
     ) {
         sistema
-            ._registrar_usuario(id, "Vendedor".into(), "vendedor@gmail.com".into())
+            ._registrar_usuario(id, "Vendedor".into(), "vendedor@gmail.com".into(), Rol::Comprador)
             .unwrap();
-        sistema._asignar_rol(id, Rol::Vendedor).unwrap();
     }
+    fn registrar_usuario_doble( 
+        sistema: &mut Sistema,
+        id: <DefaultEnvironment as ink::env::Environment>::AccountId,
+    ) {
+        sistema
+            ._registrar_usuario(id, "Comprador".into(), "comprador@gmail.com".into(), Rol::Ambos)
+            .unwrap();
+    }
+    
 
     fn agregar_categoria(sistema: &mut Sistema, nombre: &str) {
         sistema._registrar_categoria(nombre.into()).unwrap();
@@ -1148,10 +1182,11 @@ mod tests {
         let mut sistema = setup_sistema();
         let id = id_vendedor();
 
-        sistema
-            ._registrar_usuario(id, "Vendedor".into(), "ven@mail.com".into())
-            .unwrap();
-        sistema._asignar_rol(id, Rol::Vendedor).unwrap();
+        registrar_vendedor(&mut sistema, id);
+        // sistema
+        //     ._registrar_usuario(id, "Vendedor".into(), "ven@mail.com".into())
+        //     .unwrap();
+        // sistema._asignar_rol(id, Rol::Vendedor).unwrap();
         sistema._registrar_categoria("Ropa".into()).unwrap();
         sistema
             ._crear_producto(id, "Zapatillas".into(), "desc".into(), "Ropa".into(), 10)
@@ -1172,17 +1207,19 @@ mod tests {
         let id: AccountId = id_vendedor();
         let id2: AccountId = id_comprador();
 
-        sistema
-            ._registrar_usuario(id, "Vendedor".into(), "vende@mail.com".into())
-            .unwrap();
-        sistema
-            ._registrar_usuario(id2, "Comprador".into(), "compra@mail.com".into())
-            .unwrap();
+        registrar_vendedor(&mut sistema, id);
+        // sistema
+        //     ._registrar_usuario(id, "Vendedor".into(), "vende@mail.com".into())
+        //     .unwrap();
+        registrar_vendedor(&mut sistema, id2);
+        // sistema
+        //     ._registrar_usuario(id2, "Comprador".into(), "compra@mail.com".into())
+        //     .unwrap();
 
-        set_caller(id);
-        sistema.asignar_rol(Rol::Vendedor).unwrap();
-        set_caller(id2);
-        sistema.asignar_rol(Rol::Comprador).unwrap();
+        // set_caller(id);
+        // sistema.asignar_rol(Rol::Vendedor).unwrap();
+        // set_caller(id2);
+        // sistema.asignar_rol(Rol::Comprador).unwrap();
 
         set_caller(id);
         sistema._registrar_categoria("Ropa".into()).unwrap();
@@ -1200,10 +1237,11 @@ mod tests {
         let mut sistema = setup_sistema();
         let id = id_vendedor();
 
-        sistema
-            ._registrar_usuario(id, "Vendedor".into(), "ven@mail.com".into())
-            .unwrap();
-        sistema._asignar_rol(id, Rol::Vendedor).unwrap();
+        registrar_vendedor(&mut sistema, id);
+        // sistema
+        //     ._registrar_usuario(id, "Vendedor".into(), "ven@mail.com".into())
+        //     .unwrap();
+        // sistema._asignar_rol(id, Rol::Vendedor).unwrap();
 
         let res = sistema._crear_publicacion(99, id, 3, 500); // id_producto inválido
         assert!(matches!(res, Err(ErroresContrato::ProductoInexistente)));
@@ -1214,10 +1252,11 @@ mod tests {
         let mut sistema = setup_sistema();
         let id = id_vendedor();
 
-        sistema
-            ._registrar_usuario(id, "Vendedor".into(), "ven@mail.com".into())
-            .unwrap();
-        sistema._asignar_rol(id, Rol::Vendedor).unwrap();
+        registrar_vendedor(&mut sistema, id);
+        // sistema
+        //     ._registrar_usuario(id, "Vendedor".into(), "ven@mail.com".into())
+        //     .unwrap();
+        // sistema._asignar_rol(id, Rol::Vendedor).unwrap();
         sistema._registrar_categoria("Ropa".into()).unwrap();
         sistema
             ._crear_producto(id, "Pantalon".into(), "desc".into(), "Ropa".into(), 2)
@@ -1245,10 +1284,11 @@ mod tests {
         let id = id_vendedor();
         set_caller(id);
 
-        sistema
-            ._registrar_usuario(id, "Vendedor".into(), "ven@mail.com".into())
-            .unwrap();
-        sistema._asignar_rol(id, Rol::Vendedor).unwrap();
+        registrar_vendedor(&mut sistema, id);
+        // sistema
+        //     ._registrar_usuario(id, "Vendedor".into(), "ven@mail.com".into())
+        //     .unwrap();
+        // sistema._asignar_rol(id, Rol::Vendedor).unwrap();
         sistema._registrar_categoria("Ropa".into()).unwrap();
         sistema
             ._crear_producto(id, "Zapatillas".into(), "desc".into(), "Ropa".into(), 10)
@@ -1278,10 +1318,11 @@ mod tests {
         let id = id_vendedor();
         set_caller(id);
 
-        sistema
-            ._registrar_usuario(id, "Vendedor".into(), "ven@mail.com".into())
-            .unwrap();
-        sistema._asignar_rol(id, Rol::Vendedor).unwrap();
+        registrar_vendedor(&mut sistema, id);
+        // sistema
+        //     ._registrar_usuario(id, "Vendedor".into(), "ven@mail.com".into())
+        //     .unwrap();
+        // sistema._asignar_rol(id, Rol::Vendedor).unwrap();
         sistema._registrar_categoria("Ropa".into()).unwrap();
         sistema
             ._crear_producto(id, "Zapatillas".into(), "desc".into(), "Ropa".into(), 3)
@@ -1301,10 +1342,11 @@ mod tests {
         let id = id_vendedor();
         set_caller(id);
 
-        sistema
-            ._registrar_usuario(id, "Vendedor".into(), "ven@mail.com".into())
-            .unwrap();
-        sistema._asignar_rol(id, Rol::Vendedor).unwrap();
+        registrar_vendedor(&mut sistema, id);
+        // sistema
+        //     ._registrar_usuario(id, "Vendedor".into(), "ven@mail.com".into())
+        //     .unwrap();
+        // sistema._asignar_rol(id, Rol::Vendedor).unwrap();
         sistema._registrar_categoria("Ropa".into()).unwrap();
         sistema
             ._crear_producto(id, "Campera".into(), "desc".into(), "Ropa".into(), 10)
@@ -1329,10 +1371,11 @@ mod tests {
         let id = id_vendedor();
         set_caller(id);
 
-        sistema
-            ._registrar_usuario(id, "Vendedor".into(), "ven@mail.com".into())
-            .unwrap();
-        sistema._asignar_rol(id, Rol::Vendedor).unwrap();
+        registrar_vendedor(&mut sistema, id);
+        // sistema
+        //     ._registrar_usuario(id, "Vendedor".into(), "ven@mail.com".into())
+        //     .unwrap();
+        // sistema._asignar_rol(id, Rol::Vendedor).unwrap();
         sistema._registrar_categoria("Ropa".into()).unwrap();
         sistema
             ._crear_producto(id, "Pantalón".into(), "desc".into(), "Ropa".into(), 8)
@@ -1364,10 +1407,11 @@ mod tests {
         let id = id_vendedor();
         set_caller(id);
 
-        sistema
-            ._registrar_usuario(id, "Vendedor".into(), "ven@mail.com".into())
-            .unwrap();
-        sistema._asignar_rol(id, Rol::Vendedor).unwrap();
+        registrar_vendedor(&mut sistema, id);
+        // sistema
+        //     ._registrar_usuario(id, "Vendedor".into(), "ven@mail.com".into())
+        //     .unwrap();
+        // sistema._asignar_rol(id, Rol::Vendedor).unwrap();
         sistema._registrar_categoria("Ropa".into()).unwrap();
         sistema
             ._crear_producto(id, "Buzo".into(), "desc".into(), "Ropa".into(), 5)
@@ -1387,10 +1431,11 @@ mod tests {
         let id = id_vendedor();
         set_caller(id);
 
-        sistema
-            ._registrar_usuario(id, "Vendedor".into(), "ven@mail.com".into())
-            .unwrap();
-        sistema._asignar_rol(id, Rol::Vendedor).unwrap();
+        registrar_vendedor(&mut sistema, id);
+        // sistema
+        //     ._registrar_usuario(id, "Vendedor".into(), "ven@mail.com".into())
+        //     .unwrap();
+        // sistema._asignar_rol(id, Rol::Vendedor).unwrap();
         sistema._registrar_categoria("Ropa".into()).unwrap();
 
         sistema
@@ -1819,8 +1864,11 @@ mod tests {
 
         let user_created = app.listar_usuarios()[0].clone();
 
-        assert_eq!(user_created.get_name(), "user_name".to_string());
-        assert_eq!(user_created.get_mail(), "user_email".to_string());
+        assert!(!user_created.get_name().is_empty(), "nombre de usuario no debe estar vacio");
+        assert!(!user_created.get_mail().is_empty(), "email de usuario no debe estar vacio");
+
+        assert_eq!(user_created.get_name(), "user_name".to_string(), "el usuario deberia poseer el nombre que fue ingresado");
+        assert_eq!(user_created.get_mail(), "user_email".to_string(), "el usuario deberia poseer el email que fue ingresado");
     }
 
     #[ink::test]
@@ -1885,22 +1933,40 @@ mod tests {
 
     #[ink::test]
     fn asigna_rol_correctamente() {
-        let (mut app, user_id, _) = build_testing_setup();
+        let (mut app, user_id_comprador, user_id_vendedor) = build_testing_setup();
 
         assert!(
-            app._asignar_rol(user_id, Rol::Vendedor).is_ok(),
+            app._asignar_rol(user_id_comprador, Rol::Vendedor).is_ok(),
             "Se esperaba que se asigne el rol correctamente"
         );
 
         assert!(
-            app._asignar_rol(user_id, Rol::Comprador).is_ok(),
+            app._asignar_rol(user_id_vendedor, Rol::Comprador).is_ok(),
             "Se esperaba que se asigne el rol correctamente"
         );
 
         assert_eq!(
-            app._asignar_rol(user_id, Rol::Comprador),
+            app._asignar_rol(user_id_vendedor, Rol::Comprador),
             Err(ErroresContrato::AlreadyHasRol),
-            "Se esperaba error AlreadyHasRol si el usuario ya tiene el error asignado"
+            "Se esperaba error AlreadyHasRol si el usuario ya tiene el rol asignado"
+        );
+
+        let (mut app, user_id_comprador, user_id_vendedor) = build_testing_setup()
+        
+        assert!(
+            app._asignar_rol(user_id_comprador, Rol::Ambos).is_ok(),
+            "Se esperaba que se asigne el rol faltante correctamente"
+        );
+
+        assert!(
+            app._asignar_rol(user_id_vendedor, Rol::Ambos).is_ok(),
+            "Se esperaba que se asigne el rol faltante correctamente"
+        );
+
+        assert_eq!(
+            app._asignar_rol(user_id_vendedor, Rol::Ambos),
+            Err(ErroresContrato::AlreadyHasRol),
+            "Se esperaba error AlreadyHasRol si el usuario ya tiene los roles asignados"
         );
     }
 
@@ -1921,23 +1987,25 @@ mod tests {
         let mut contrato = setup_sistema();
         let (id_comprador, id_vendedor) = build_testing_accounts();
 
-        contrato
-            ._registrar_usuario(
-                id_comprador,
-                "Juan comprador".to_string(),
-                "comprador@gmail.com".to_string(),
-            )
-            .unwrap();
-        contrato._asignar_rol(id_comprador, COMPRADOR).unwrap();
+        registrar_comprador(sistema, id_comprador);
+        // contrato
+        //     ._registrar_usuario(
+        //         id_comprador,
+        //         "Juan comprador".to_string(),
+        //         "comprador@gmail.com".to_string(),
+        //     )
+        //     .unwrap();
+        // contrato._asignar_rol(id_comprador, COMPRADOR).unwrap();
 
-        contrato
-            ._registrar_usuario(
-                id_vendedor,
-                "Usuario vendedor".to_string(),
-                "vendedor@gmail.com".to_string(),
-            )
-            .unwrap();
-        contrato._asignar_rol(id_vendedor, VENDEDOR).unwrap();
+        registrar_vendedor(sistema, id_vendedor);
+        // contrato
+        //     ._registrar_usuario(
+        //         id_vendedor,
+        //         "Usuario vendedor".to_string(),
+        //         "vendedor@gmail.com".to_string(),
+        //     )
+        //     .unwrap();
+        // contrato._asignar_rol(id_vendedor, VENDEDOR).unwrap();
 
         contrato._registrar_categoria("Libros".to_string()).unwrap();
         contrato
@@ -1969,23 +2037,25 @@ mod tests {
         let mut contrato = setup_sistema();
         let (comprador, vendedor) = build_testing_accounts();
 
-        contrato
-            ._registrar_usuario(
-                vendedor,
-                "Santiago vendedor".to_string(),
-                "ST96@Gmail.com".to_string(),
-            )
-            .unwrap();
-        contrato._asignar_rol(vendedor, VENDEDOR).unwrap();
+        registrar_vendedor(sistema, vendedor);
+        // contrato
+        //     ._registrar_usuario(
+        //         vendedor,
+        //         "Santiago vendedor".to_string(),
+        //         "ST96@Gmail.com".to_string(),
+        //     )
+        //     .unwrap();
+        // contrato._asignar_rol(vendedor, VENDEDOR).unwrap();
 
-        contrato
-            ._registrar_usuario(
-                comprador,
-                "Juan comprador".to_string(),
-                "JT11@Gmail.com".to_string(),
-            )
-            .unwrap();
-        contrato._asignar_rol(comprador, COMPRADOR).unwrap();
+        registrar_comprador(sistema, comprador);
+        // contrato
+        //     ._registrar_usuario(
+        //         comprador,
+        //         "Juan comprador".to_string(),
+        //         "JT11@Gmail.com".to_string(),
+        //     )
+        //     .unwrap();
+        // contrato._asignar_rol(comprador, COMPRADOR).unwrap();
 
         contrato
             ._registrar_categoria("Electronica".to_string())
@@ -2015,22 +2085,24 @@ mod tests {
         let mut contrato = setup_sistema();
         let (no_comprador, vendedor) = build_testing_accounts();
 
-        contrato
-            ._registrar_usuario(
-                vendedor,
-                "Juan Vendedor".to_string(),
-                "JT11@Gmail.com".to_string(),
-            )
-            .unwrap();
-        contrato._asignar_rol(vendedor, VENDEDOR).unwrap();
+        registrar_vendedor(sistema, vendedor);
+        // contrato
+        //     ._registrar_usuario(
+        //         vendedor,
+        //         "Juan Vendedor".to_string(),
+        //         "JT11@Gmail.com".to_string(),
+        //     )
+        //     .unwrap();
+        // contrato._asignar_rol(vendedor, VENDEDOR).unwrap();
 
-        contrato
-            ._registrar_usuario(
-                no_comprador,
-                "Santi No comprador".to_string(),
-                "ST96@Gmail.com".to_string(),
-            )
-            .unwrap();
+        registrar_vendedor(sistema, no_comprador);
+        // contrato
+        //     ._registrar_usuario(
+        //         no_comprador,
+        //         "Santi No comprador".to_string(),
+        //         "ST96@Gmail.com".to_string(),
+        //     )
+        //     .unwrap();
 
         contrato
             ._registrar_categoria("Una cat".to_string())
@@ -2058,22 +2130,24 @@ mod tests {
         let (comprador, vendedor) = build_testing_accounts();
 
         // registrar usuarios y roles
-        contrato
-            ._registrar_usuario(
-                vendedor,
-                "Juan Vendedor".to_string(),
-                "vendedor@mail.com".to_string(),
-            )
-            .unwrap();
-        contrato._asignar_rol(vendedor, VENDEDOR).unwrap();
-        contrato
-            ._registrar_usuario(
-                comprador,
-                "Santi Comprador".to_string(),
-                "comprador@mail.com".to_string(),
-            )
-            .unwrap();
-        contrato._asignar_rol(comprador, COMPRADOR).unwrap();
+        registrar_vendedor(sistema, vendedor);
+        // contrato
+        //     ._registrar_usuario(
+        //         vendedor,
+        //         "Juan Vendedor".to_string(),
+        //         "vendedor@mail.com".to_string(),
+        //     )
+        //     .unwrap();
+        // contrato._asignar_rol(vendedor, VENDEDOR).unwrap();
+        registrar_comprador(sistema, comprador);
+        // contrato
+        //     ._registrar_usuario(
+        //         comprador,
+        //         "Santi Comprador".to_string(),
+        //         "comprador@mail.com".to_string(),
+        //     )
+        //     .unwrap();
+        // contrato._asignar_rol(comprador, COMPRADOR).unwrap();
 
         // Creo categoría, producto y publicación
         contrato._registrar_categoria("Juegos".to_string()).unwrap();
@@ -2110,19 +2184,21 @@ mod tests {
         let contrato_account = ink::env::test::callee::<ink::env::DefaultEnvironment>();
         ink::env::test::set_callee::<ink::env::DefaultEnvironment>(contrato_account);
 
-        contrato
-            ._registrar_usuario(
-                vendedor,
-                "Santiago".to_string(),
-                "santi@mail.com".to_string(),
-            )
-            .unwrap();
-        contrato._asignar_rol(vendedor, VENDEDOR).unwrap();
+        registrar_vendedor(sistema, vendedor);
+        // contrato
+        //     ._registrar_usuario(
+        //         vendedor,
+        //         "Santiago".to_string(),
+        //         "santi@mail.com".to_string(),
+        //     )
+        //     .unwrap();
+        // contrato._asignar_rol(vendedor, VENDEDOR).unwrap();
 
-        contrato
-            ._registrar_usuario(comprador, "Juan".to_string(), "juan@mail.com".to_string())
-            .unwrap();
-        contrato._asignar_rol(comprador, COMPRADOR).unwrap();
+        registrar_comprador(sistema, comprador);
+        // contrato
+        //     ._registrar_usuario(comprador, "Juan".to_string(), "juan@mail.com".to_string())
+        //     .unwrap();
+        // contrato._asignar_rol(comprador, COMPRADOR).unwrap();
 
         contrato._registrar_categoria("Libros".to_string()).unwrap();
         contrato
@@ -2146,10 +2222,11 @@ mod tests {
         let mut contrato = setup_sistema();
         let vendedor = id_vendedor();
 
-        contrato
-            ._registrar_usuario(vendedor, "Ven".into(), "v@mail.com".to_string())
-            .unwrap();
-        contrato._asignar_rol(vendedor, VENDEDOR).unwrap();
+        registrar_vendedor(sistema, vendedor);
+        // contrato
+        //     ._registrar_usuario(vendedor, "Ven".into(), "v@mail.com".to_string())
+        //     .unwrap();
+        // contrato._asignar_rol(vendedor, VENDEDOR).unwrap();
 
         ink::env::test::set_caller::<ink::env::DefaultEnvironment>(vendedor);
 
@@ -2164,10 +2241,12 @@ mod tests {
         let (comprador, vendedor) = build_testing_accounts();
 
         // Registro usuarios y roles
-        contrato._registrar_usuario(vendedor, "Santiago".to_string(), "ST96@mail.com".to_string()).unwrap();
-        contrato._asignar_rol(vendedor, Rol::Vendedor).unwrap();
-        contrato._registrar_usuario(comprador, "Juan".to_string(), "JT11@mail.com".to_string()).unwrap();
-        contrato._asignar_rol(comprador, Rol::Comprador).unwrap();
+        registrar_vendedor(sistema, vendedor);
+        // contrato._registrar_usuario(vendedor, "Santiago".to_string(), "ST96@mail.com".to_string()).unwrap();
+        // contrato._asignar_rol(vendedor, Rol::Vendedor).unwrap();
+        registrar_comprador(sistema, comprador);
+        // contrato._registrar_usuario(comprador, "Juan".to_string(), "JT11@mail.com".to_string()).unwrap();
+        // contrato._asignar_rol(comprador, Rol::Comprador).unwrap();
 
         //Creo publicación
         contrato._registrar_categoria("Libros".to_string()).unwrap();
