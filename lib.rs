@@ -532,7 +532,7 @@ mod contract {
 
             // Instancio nuevo usuario
             let usuario = Usuario::new(id, nombre, mail);
-            self._asignar_rol(id, rol);
+            self._asignar_rol(id, rol)?;
 
 
             // Inserto el usuario tanto en el Mapping como en el Vec
@@ -590,8 +590,7 @@ mod contract {
                 }else{
                     return Err(ErroresContrato::AlreadyHasRol);
                 }
-            }
-            if usuario.has_role(rol.clone()) {
+            }else if usuario.has_role(rol.clone()) {
                 return Err(ErroresContrato::AlreadyHasRol);
             }
             usuario.roles.push(rol);
