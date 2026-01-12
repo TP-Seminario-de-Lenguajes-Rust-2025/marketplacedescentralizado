@@ -61,7 +61,7 @@ mod contract {
             descripcion: String,
             categoria: String,
             stock: u32,
-        ) -> Result<(), ErroresContrato>;
+        ) -> Result<u32, ErroresContrato>;
 
         fn descontar_stock_producto(
             &mut self,
@@ -99,7 +99,7 @@ mod contract {
             id_pub: u32,
             id_comprador: AccountId,
             cantidad: u32,
-        ) -> Result<(), ErroresContrato>;
+        ) -> Result<u32, ErroresContrato>;
 
         fn _listar_ordenes(&self) -> Vec<Orden>;
 
@@ -117,7 +117,7 @@ mod contract {
             id_usuario: AccountId,
             stock: u32,
             precio: Balance,
-        ) -> Result<(), ErroresContrato>;
+        ) -> Result<u32, ErroresContrato>;
 
         fn descontar_stock_publicacion(
             &mut self,
