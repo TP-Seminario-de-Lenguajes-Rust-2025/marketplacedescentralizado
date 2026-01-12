@@ -1224,7 +1224,7 @@ mod tests {
 
         assert!(res.is_ok());
 
-        let retorno = sistema._listar_publicaciones()[0].clone();
+        let retorno = sistema._listar_publicaciones_propias(id)[0].clone();
         assert_eq!(esperado, retorno);
     }
 
