@@ -532,7 +532,7 @@ mod contract {
 
             // Instancio nuevo usuario
             let usuario = Usuario::new(id, nombre, mail);
-            usuario._asignar_rol(rol);
+            self._asignar_rol(rol);
 
 
             // Inserto el usuario tanto en el Mapping como en el Vec
