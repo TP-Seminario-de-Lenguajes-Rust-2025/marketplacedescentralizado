@@ -133,6 +133,8 @@ mod contract {
         fn get_id_vendedor(&self, id_pub: u32) -> Result<AccountId, ErroresContrato>; // HAY QUE VOLARLO A LA MIERDA EN LA 2DA ENTREGA
 
         fn _listar_publicaciones(&self) -> Vec<Publicacion>;
+
+        fn _listar_publicaciones_propias(&self, id_usuario: AccountId) -> Vec<Publicacion>;
     }
 
     pub trait GestionCategoria {
@@ -365,7 +367,7 @@ mod contract {
         /// Cancela una orden pendiente o aún no enviada.
         ///
         /// # Parámetros
-        /// - `id_orden`: ID de la orden a cancelar.
+        /// - `id_orden`: ID de la orden a cancelar.listar_publicaciones_propias
         ///
         /// # Requisitos
         /// - El caller debe estar registrado y tener rol de `Comprador`.
@@ -417,6 +419,22 @@ mod contract {
         #[ink(message)]
         pub fn listar_publicaciones(&self) -> Vec<Publicacion> {
             self._listar_publicaciones()
+        }
+
+        /// Devuelve una lista de todas las publicaciones del usuario loggeado
+        ///
+        /// # Requisitos
+        /// - El caller debe estar registrado y tener rol de `Vendedor`.
+        ///
+        /// # Errores
+        /// - `CuentaNoRegistrada` si el caller no está registrado.
+        /// - `UsuarioSinRoles` si el caller no tiene el rol adecuado.
+        /// - `ProductoInexistente` si el producto no existe.
+        #[ink(message)]
+        pub fn listar_publicaciones_propias(&self) -> Vec<Publicacion> {
+            let id = self.env().caller();
+            self._usuario_con_rol(VENDEDOR)?;
+            self._listar_publicaciones_propias(id);
         }
 
         /// Devuelve una lista de todas las ordenes de compra registradas en el contrato.
@@ -729,6 +747,18 @@ mod contract {
             for i in 0..self.publicaciones.len() {
                 if let Some(publi) = self.publicaciones.get(i) {
                     resultado.push(publi);
+                }
+            }
+            resultado
+        }
+
+        fn _listar_publicaciones_propias(&self, id_usuario: AccountId) -> Vec<Publicacion> {
+            let mut resultado = Vec::new();
+            for i in 0..self.publicaciones.len() {
+                if let Some(publi) = self.publicaciones.get(i) {
+                    if publi.id_user == id_usuario {
+                        resultado.push(publi);
+                    }
                 }
             }
             resultado
@@ -2196,24 +2226,37 @@ mod tests {
         let (comprador, vendedor) = build_testing_accounts();
 
         // Registro usuarios y roles
-        contrato._registrar_usuario(vendedor, "Santiago".to_string(), "ST96@mail.com".to_string()).unwrap();
+        contrato
+            ._registrar_usuario(
+                vendedor,
+                "Santiago".to_string(),
+                "ST96@mail.com".to_string(),
+            )
+            .unwrap();
         contrato._asignar_rol(vendedor, Rol::Vendedor).unwrap();
-        contrato._registrar_usuario(comprador, "Juan".to_string(), "JT11@mail.com".to_string()).unwrap();
+        contrato
+            ._registrar_usuario(comprador, "Juan".to_string(), "JT11@mail.com".to_string())
+            .unwrap();
         contrato._asignar_rol(comprador, Rol::Comprador).unwrap();
 
         //Creo publicación
         contrato._registrar_categoria("Libros".to_string()).unwrap();
-        contrato._crear_producto(vendedor, "Rust".to_string(), "Desc".to_string(), "Libros".to_string(), 5).unwrap();
+        contrato
+            ._crear_producto(
+                vendedor,
+                "Rust".to_string(),
+                "Desc".to_string(),
+                "Libros".to_string(),
+                5,
+            )
+            .unwrap();
         contrato._crear_publicacion(0, vendedor, 5, 100).unwrap();
-
 
         ink::env::test::set_caller::<ink::env::DefaultEnvironment>(comprador);
         contrato.crear_orden(0, 1).unwrap();
 
- 
         ink::env::test::set_caller::<ink::env::DefaultEnvironment>(vendedor);
         contrato.enviar_producto(0).unwrap();
-
 
         ink::env::test::set_caller::<ink::env::DefaultEnvironment>(comprador);
         let res = contrato.recibir_producto(0);
