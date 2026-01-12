@@ -395,7 +395,7 @@ mod contract {
         ///
         #[ink(message)]
         pub fn asignar_rol(&mut self, rol: Rol) -> Result<String, ErroresContrato> {
-            self._asignar_rol(self.env().caller(), rol)?
+            self._asignar_rol(self.env().caller(), rol)
         }
 
         /// Devuelve una lista de todos los usuarios registrados en el contrato.
@@ -532,7 +532,7 @@ mod contract {
 
             // Instancio nuevo usuario
             let usuario = Usuario::new(id, nombre, mail);
-            self._asignar_rol(id, rol)?;
+            self._asignar_rol(id, rol);
 
 
             // Inserto el usuario tanto en el Mapping como en el Vec
