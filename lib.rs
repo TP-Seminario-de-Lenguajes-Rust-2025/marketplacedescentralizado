@@ -434,7 +434,7 @@ mod contract {
         pub fn listar_publicaciones_propias(&self) -> Result<Vec<Publicacion>, ErroresContrato> {
             let id = self.env().caller();
             self._usuario_con_rol(VENDEDOR)?;
-            self._listar_publicaciones_propias(id)
+            Ok(self._listar_publicaciones_propias(id))
         }
 
         /// Devuelve una lista de todas las ordenes de compra registradas en el contrato.
