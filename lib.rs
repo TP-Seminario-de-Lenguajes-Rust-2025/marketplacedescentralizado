@@ -1857,7 +1857,8 @@ mod tests {
             app._registrar_usuario(
                 id_comprador,
                 "user_name".to_string(),
-                "user_email".to_string()
+                "user_email".to_string(),
+                Rol::Ambos,
             )
             .is_ok(),
             "Se esperaba que se registre un usuario"
