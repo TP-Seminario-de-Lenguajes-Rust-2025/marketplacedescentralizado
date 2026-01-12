@@ -448,7 +448,7 @@ mod contract {
             descripcion: String,
             categoria: String,
             stock: u32,
-        ) -> Result<(), ErroresContrato> {
+        ) -> Result<u32, ErroresContrato> {
             let id = self.productos.len();
             let usuario = self.get_user(&id_vendedor)?;
             if usuario.has_role(VENDEDOR) {
@@ -456,7 +456,7 @@ mod contract {
                 let producto = Producto::new(id, id_vendedor, nombre, descripcion, id_cat, stock);
                 if !self.producto_existe(&producto) {
                     self.productos.push(&producto);
-                    Ok(())
+                    Ok(id)
                 } else {
                     return Err(ErroresContrato::ProductoYaExistente);
                 }
@@ -605,7 +605,7 @@ mod contract {
             id_pub: u32,
             id_comprador: AccountId,
             cantidad: u32,
-        ) -> Result<(), ErroresContrato> {
+        ) -> Result<u32, ErroresContrato> {
             let id_orden = self.ordenes.len();
             let comprador = self.get_user(&id_comprador)?;
             let id_vendedor = self.get_id_vendedor(id_pub)?;
@@ -626,7 +626,7 @@ mod contract {
                         precio_total,
                     );
                     self.ordenes.push(&orden);
-                    Ok(())
+                    Ok(id_orden)
                 } else {
                     return Err(ErroresContrato::CantidadEnCarritoMenorAUno);
                 }
@@ -701,14 +701,14 @@ mod contract {
             id_usuario: AccountId,
             stock: u32,
             precio: Balance,
-        ) -> Result<(), ErroresContrato> {
+        ) -> Result<u32, ErroresContrato> {
             let id = self.publicaciones.len();
             let usuario = self.get_user(&id_usuario)?;
             if usuario.has_role(VENDEDOR) {
                 self.descontar_stock_producto(id_producto, stock)?;
                 let p = Publicacion::new(id, id_producto, id_usuario, stock, precio); // precio o precio unitario?
                 self.publicaciones.push(&p);
-                Ok(())
+                Ok(id)
             } else {
                 Err(ErroresContrato::RolNoApropiado)
             }
