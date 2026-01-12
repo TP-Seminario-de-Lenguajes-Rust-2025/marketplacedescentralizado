@@ -243,7 +243,7 @@ mod contract {
             id_producto: u32,
             stock: u32,
             precio: Balance,
-        ) -> Result<(), ErroresContrato> {
+        ) -> Result<u32, ErroresContrato> {
             let id_usuario = self.env().caller();
             self._crear_publicacion(id_producto, id_usuario, stock, precio)
         }
@@ -287,7 +287,7 @@ mod contract {
             descripcion: String,
             categoria: String,
             stock: u32,
-        ) -> Result<(), ErroresContrato> {
+        ) -> Result<u32, ErroresContrato> {
             let id_vendedor = self.env().caller();
             self._crear_producto(id_vendedor, nombre, descripcion, categoria, stock)
         }
@@ -312,7 +312,7 @@ mod contract {
             id_pub: u32,
             cantidad: u32,
             //precio_total: Decimal
-        ) -> Result<(), ErroresContrato> {
+        ) -> Result<u32, ErroresContrato> {
             let id_comprador = self.env().caller();
             self._crear_orden(id_pub, id_comprador, cantidad)
         }
