@@ -1987,7 +1987,7 @@ mod tests {
         let mut contrato = setup_sistema();
         let (id_comprador, id_vendedor) = build_testing_accounts();
 
-        registrar_comprador(sistema, id_comprador);
+        registrar_comprador(&mut contrato, id_comprador);
         // contrato
         //     ._registrar_usuario(
         //         id_comprador,
@@ -1997,7 +1997,7 @@ mod tests {
         //     .unwrap();
         // contrato._asignar_rol(id_comprador, COMPRADOR).unwrap();
 
-        registrar_vendedor(sistema, id_vendedor);
+        registrar_vendedor(&mut contrato, id_vendedor);
         // contrato
         //     ._registrar_usuario(
         //         id_vendedor,
@@ -2037,7 +2037,7 @@ mod tests {
         let mut contrato = setup_sistema();
         let (comprador, vendedor) = build_testing_accounts();
 
-        registrar_vendedor(sistema, vendedor);
+        registrar_vendedor(&mut contrato, vendedor);
         // contrato
         //     ._registrar_usuario(
         //         vendedor,
@@ -2047,7 +2047,7 @@ mod tests {
         //     .unwrap();
         // contrato._asignar_rol(vendedor, VENDEDOR).unwrap();
 
-        registrar_comprador(sistema, comprador);
+        registrar_comprador(&mut contrato, comprador);
         // contrato
         //     ._registrar_usuario(
         //         comprador,
@@ -2085,7 +2085,7 @@ mod tests {
         let mut contrato = setup_sistema();
         let (no_comprador, vendedor) = build_testing_accounts();
 
-        registrar_vendedor(sistema, vendedor);
+        registrar_vendedor(&mut contrato, vendedor);
         // contrato
         //     ._registrar_usuario(
         //         vendedor,
@@ -2095,7 +2095,7 @@ mod tests {
         //     .unwrap();
         // contrato._asignar_rol(vendedor, VENDEDOR).unwrap();
 
-        registrar_vendedor(sistema, no_comprador);
+        registrar_vendedor(&mut contrato, no_comprador);
         // contrato
         //     ._registrar_usuario(
         //         no_comprador,
@@ -2130,7 +2130,7 @@ mod tests {
         let (comprador, vendedor) = build_testing_accounts();
 
         // registrar usuarios y roles
-        registrar_vendedor(sistema, vendedor);
+        registrar_vendedor(&mut contrato, vendedor);
         // contrato
         //     ._registrar_usuario(
         //         vendedor,
@@ -2139,7 +2139,7 @@ mod tests {
         //     )
         //     .unwrap();
         // contrato._asignar_rol(vendedor, VENDEDOR).unwrap();
-        registrar_comprador(sistema, comprador);
+        registrar_comprador(&mut contrato, comprador);
         // contrato
         //     ._registrar_usuario(
         //         comprador,
@@ -2184,7 +2184,7 @@ mod tests {
         let contrato_account = ink::env::test::callee::<ink::env::DefaultEnvironment>();
         ink::env::test::set_callee::<ink::env::DefaultEnvironment>(contrato_account);
 
-        registrar_vendedor(sistema, vendedor);
+        registrar_vendedor(&mut contrato, vendedor);
         // contrato
         //     ._registrar_usuario(
         //         vendedor,
@@ -2194,7 +2194,7 @@ mod tests {
         //     .unwrap();
         // contrato._asignar_rol(vendedor, VENDEDOR).unwrap();
 
-        registrar_comprador(sistema, comprador);
+        registrar_comprador(&mut contrato, comprador);
         // contrato
         //     ._registrar_usuario(comprador, "Juan".to_string(), "juan@mail.com".to_string())
         //     .unwrap();
@@ -2222,7 +2222,7 @@ mod tests {
         let mut contrato = setup_sistema();
         let vendedor = id_vendedor();
 
-        registrar_vendedor(sistema, vendedor);
+        registrar_vendedor(&mut contrato, vendedor);
         // contrato
         //     ._registrar_usuario(vendedor, "Ven".into(), "v@mail.com".to_string())
         //     .unwrap();
@@ -2241,10 +2241,10 @@ mod tests {
         let (comprador, vendedor) = build_testing_accounts();
 
         // Registro usuarios y roles
-        registrar_vendedor(sistema, vendedor);
+        registrar_vendedor(&mut contrato, vendedor);
         // contrato._registrar_usuario(vendedor, "Santiago".to_string(), "ST96@mail.com".to_string()).unwrap();
         // contrato._asignar_rol(vendedor, Rol::Vendedor).unwrap();
-        registrar_comprador(sistema, comprador);
+        registrar_comprador(&mut contrato, comprador);
         // contrato._registrar_usuario(comprador, "Juan".to_string(), "JT11@mail.com".to_string()).unwrap();
         // contrato._asignar_rol(comprador, Rol::Comprador).unwrap();
 
