@@ -1124,14 +1124,14 @@ mod tests {
             user_1,
             "user_name_1".to_string(),
             "user_email_1".to_string(),
-            rol::Comprador,
+            Rol::Comprador,
         )
         .expect("No se pudo registrar el usuario");
         app._registrar_usuario(
             user_2,
             "user_name_2".to_string(),
             "user_email_2".to_string(),
-            rol::Vendedor,
+            Rol::Vendedor,
         )
         .expect("No se pudo registrar el usuario");
 
