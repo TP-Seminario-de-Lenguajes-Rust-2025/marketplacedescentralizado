@@ -80,6 +80,7 @@ mod contract {
             id: AccountId,
             nombre: String,
             mail: String,
+            rol:Rol,
         ) -> Result<String, ErroresContrato>;
 
         fn get_user(&mut self, id: &AccountId) -> Result<Usuario, ErroresContrato>;
