@@ -1152,7 +1152,7 @@ mod tests {
         id: <DefaultEnvironment as ink::env::Environment>::AccountId,
     ) {
         sistema
-            ._registrar_usuario(id, "Vendedor".into(), "vendedor@gmail.com".into(), Rol::Comprador)
+            ._registrar_usuario(id, "Vendedor".into(), "vendedor@gmail.com".into(), Rol::Vendedor)
             .unwrap();
     }
     fn registrar_usuario_doble( 
@@ -1951,7 +1951,7 @@ mod tests {
             "Se esperaba error AlreadyHasRol si el usuario ya tiene el rol asignado"
         );
 
-        let (mut app, user_id_comprador, user_id_vendedor) = build_testing_setup()
+        let (mut app, user_id_comprador, user_id_vendedor) = build_testing_setup();
         
         assert!(
             app._asignar_rol(user_id_comprador, Rol::Ambos).is_ok(),
