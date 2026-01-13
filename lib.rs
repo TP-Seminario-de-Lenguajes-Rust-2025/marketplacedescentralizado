@@ -1212,7 +1212,7 @@ mod tests {
         // sistema
         //     ._registrar_usuario(id, "Vendedor".into(), "vende@mail.com".into())
         //     .unwrap();
-        registrar_vendedor(&mut sistema, id2);
+        registrar_comprador(&mut sistema, id2);
         // sistema
         //     ._registrar_usuario(id2, "Comprador".into(), "compra@mail.com".into())
         //     .unwrap();
@@ -2100,14 +2100,15 @@ mod tests {
         //     .unwrap();
         // contrato._asignar_rol(vendedor, VENDEDOR).unwrap();
 
-        registrar_vendedor(&mut contrato, no_comprador);
-        // contrato
-        //     ._registrar_usuario(
-        //         no_comprador,
-        //         "Santi No comprador".to_string(),
-        //         "ST96@Gmail.com".to_string(),
-        //     )
-        //     .unwrap();
+        // registrar_vendedor(&mut contrato, no_comprador);
+        contrato
+            ._registrar_usuario(
+                no_comprador,
+                "Santi No comprador".to_string(),
+                "ST96@Gmail.com".to_string(),
+                Rol::Vendedor,
+            )
+            .unwrap();
 
         contrato
             ._registrar_categoria("Una cat".to_string())
