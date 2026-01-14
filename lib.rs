@@ -2084,7 +2084,7 @@ mod tests {
             Err(ErroresContrato::CantidadEnCarritoMenorAUno)
         ));
     }
-
+ 
     #[ink::test]
     fn test_crear_orden_sin_rol_comprador_fallido() {
         let mut contrato = setup_sistema();
