@@ -374,7 +374,7 @@ mod contract {
         /// - `UsuarioSinRoles` si no tiene el rol correspondiente.
         ///
         // #[ink(message)]
-        // pub fn cancelar_producto(&mut self, id_orden: u32) -> Result<String, ErroresContrato> {
+        // pub fn cancelar_producto(&mut self, id_orden: u32) -> Result<String, ErroresContrato> { //no deberia ser cancelar_orden?
         //     // Compruebo que el usuario existe y posee rol de vendedor
         //     self._usuario_con_rol(COMPRADOR)?; //TODO: me parece que habia una logica adicional en el cancelar... CHEQUEAR
         //     self._cancelar_orden(id_orden)?;
