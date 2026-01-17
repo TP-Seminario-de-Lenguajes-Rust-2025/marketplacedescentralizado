@@ -620,7 +620,7 @@ mod contract {
             if rol==Rol::Ambos{
                 let rol1:Result<String, ErroresContrato> = self._asignar_rol(id, Rol::Vendedor);
                 let rol2:Result<String, ErroresContrato> = self._asignar_rol(id, Rol::Comprador);
-                if (rol1.is_ok()||rol2.is_ok()){
+                if rol1.is_ok()||rol2.is_ok(){
                     return Ok(String::from("roles agregados correctamente"));
                 }else{
                     return Err(ErroresContrato::AlreadyHasRol);
@@ -1875,7 +1875,7 @@ mod tests {
         agregar_categoria(&mut sistema, "Ropa");
 
         sistema
-            ._crear_producto(id, "Zapatilla".into(), "desc".into(), "Ropa".into(), 5)
+            ._crear_producto(id, "Zapatilla".into(), "desc".into(), "Ropa".into(), 5) 
             .unwrap();
 
         // descuento mas stock de lo que tengo
@@ -2399,9 +2399,10 @@ mod tests {
         // Configurar usuarios y productos
         registrar_comprador(&mut contrato, comprador);
         registrar_vendedor(&mut contrato, vendedor);
-        contrato.asignar_rol(Rol::Comprador);
-        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(comprador);
-        contrato.asignar_rol(Rol::Comprador).unwrap();
+        
+        // ink::env::test::set_caller::<ink::env::DefaultEnvironment>(comprador);
+        // contrato.asignar_rol(Rol::Comprador).unwrap();
+        
         ink::env::test::set_caller::<ink::env::DefaultEnvironment>(vendedor);
         agregar_categoria(&mut contrato, "Electrónicos");
         contrato
@@ -2433,11 +2434,10 @@ mod tests {
         registrar_comprador(&mut contrato, comprador);
         registrar_vendedor(&mut contrato, vendedor_original);
         // Registrar segundo vendedor con email diferente
-        contrato._registrar_usuario(vendedor_intruso, "Vendedor2".into(), "vendedor2@gmail.com".into()).unwrap();
-        contrato._asignar_rol(vendedor_intruso, Rol::Vendedor).unwrap();
+        contrato._registrar_usuario(vendedor_intruso, "Vendedor2".into(), "vendedor2@gmail.com".into(), Rol::Vendedor).unwrap();
         
-        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(comprador);
-        contrato.asignar_rol(Rol::Comprador).unwrap();
+        // ink::env::test::set_caller::<ink::env::DefaultEnvironment>(comprador);
+        // contrato.asignar_rol(Rol::Comprador).unwrap();
         
         ink::env::test::set_caller::<ink::env::DefaultEnvironment>(vendedor_original);
         agregar_categoria(&mut contrato, "Electrónicos");
@@ -2467,8 +2467,8 @@ mod tests {
         registrar_comprador(&mut contrato, comprador);
         registrar_vendedor(&mut contrato, vendedor);
         
-        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(comprador);
-        contrato.asignar_rol(Rol::Comprador).unwrap();
+        // ink::env::test::set_caller::<ink::env::DefaultEnvironment>(comprador);
+        // contrato.asignar_rol(Rol::Comprador).unwrap();
         
         ink::env::test::set_caller::<ink::env::DefaultEnvironment>(vendedor);
         agregar_categoria(&mut contrato, "Electrónicos");
@@ -2503,14 +2503,14 @@ mod tests {
         // Configurar usuarios y productos
         registrar_comprador(&mut contrato, comprador_original);
         // Registrar segundo comprador con email diferente
-        contrato._registrar_usuario(comprador_intruso, "Comprador2".into(), "comprador2@gmail.com".into()).unwrap();
+        contrato._registrar_usuario(comprador_intruso, "Comprador2".into(), "comprador2@gmail.com".into(), Rol::Comprador).unwrap();
         registrar_vendedor(&mut contrato, vendedor);
         
-        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(comprador_original);
-        contrato.asignar_rol(Rol::Comprador).unwrap();
+        // ink::env::test::set_caller::<ink::env::DefaultEnvironment>(comprador_original);
+        // contrato.asignar_rol(Rol::Comprador).unwrap();
         
-        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(comprador_intruso);
-        contrato.asignar_rol(Rol::Comprador).unwrap();
+        // ink::env::test::set_caller::<ink::env::DefaultEnvironment>(comprador_intruso);
+        // contrato.asignar_rol(Rol::Comprador).unwrap();
         
         ink::env::test::set_caller::<ink::env::DefaultEnvironment>(vendedor);
         agregar_categoria(&mut contrato, "Electrónicos");
