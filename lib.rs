@@ -4,7 +4,7 @@
 mod contract {
     use ink::{
         prelude::{string::String, vec::Vec},
-        storage::{traits::StorageLayout, Mapping, StorageVec},
+        storage::{Mapping, StorageVec, traits::StorageLayout}, xcm::v2::Junction::AccountId32,
     };
     use scale::{Decode, Encode};
     use scale_info::TypeInfo;
@@ -17,6 +17,9 @@ mod contract {
     #[derive(Debug, PartialEq)]
 
     pub enum ErroresContrato {
+        DatosInvalidos, //nombre o descripcion vacios 
+        PrecioInvalido, //precio es  <= 0
+        StockInvalido, //Stock es <= 0
         UsuarioSinRoles,
         UsuarioYaExistente,
         UsuarioNoEsComprador,
@@ -35,6 +38,8 @@ mod contract {
         CuentaNoRegistrada,
         MailYaExistente,
         MailInexistente,
+        NoEsCompradorOriginal,
+        NoEsVendedorOriginal,
         ProductoInexistente,
         ProductoYaExistente,
         PublicacionNoExiste,
@@ -104,9 +109,9 @@ mod contract {
 
         fn _listar_ordenes(&self) -> Vec<Orden>;
 
-        fn _enviar_orden(&mut self, id_orden: u32) -> Result<(), ErroresContrato>;
+        fn _enviar_orden(&mut self, id_orden: u32, id_vendedor: AccountId) -> Result<(), ErroresContrato>;
 
-        fn _recibir_orden(&mut self, id_orden: u32) -> Result<(), ErroresContrato>;
+        fn _recibir_orden(&mut self, id_orden: u32, id_comprador: AccountId) -> Result<(), ErroresContrato>;
 
         //fn _cancelar_orden(&mut self, id_orden: u32) -> Result<(), ErroresContrato>;
     }
@@ -131,6 +136,8 @@ mod contract {
         fn get_id_vendedor(&self, id_pub: u32) -> Result<AccountId, ErroresContrato>; // HAY QUE VOLARLO A LA MIERDA EN LA 2DA ENTREGA
 
         fn _listar_publicaciones(&self) -> Vec<Publicacion>;
+
+        fn _listar_publicaciones_propias(&self, id_usuario: AccountId) -> Vec<Publicacion>;
     }
 
     pub trait GestionCategoria {
@@ -334,7 +341,8 @@ mod contract {
         pub fn enviar_producto(&mut self, id_orden: u32) -> Result<String, ErroresContrato> {
             // Compruebo que el usuario existe y posee rol de vendedor
             self._usuario_con_rol(VENDEDOR)?;
-            self._enviar_orden(id_orden)?;
+            let id_vendedor = self.env().caller();
+            self._enviar_orden(id_orden, id_vendedor)?;
             Ok(String::from("La orden fue enviada correctamente"))
         }
 
@@ -355,14 +363,15 @@ mod contract {
         pub fn recibir_producto(&mut self, id_orden: u32) -> Result<String, ErroresContrato> {
             // Compruebo que el usuario existe y posee rol de vendedor
             self._usuario_con_rol(COMPRADOR)?;
-            self._recibir_orden(id_orden)?;
+            let id_comprador = self.env().caller();
+            self._recibir_orden(id_orden, id_comprador)?;
             Ok(String::from("La orden fue recibida correctamente"))
         }
 
         /// Cancela una orden pendiente o aún no enviada.
         ///
         /// # Parámetros
-        /// - `id_orden`: ID de la orden a cancelar.
+        /// - `id_orden`: ID de la orden a cancelar.listar_publicaciones_propias
         ///
         /// # Requisitos
         /// - El caller debe estar registrado y tener rol de `Comprador`.
@@ -416,6 +425,22 @@ mod contract {
             self._listar_publicaciones()
         }
 
+        /// Devuelve una lista de todas las publicaciones del usuario loggeado
+        ///
+        /// # Requisitos
+        /// - El caller debe estar registrado y tener rol de `Vendedor`.
+        ///
+        /// # Errores
+        /// - `CuentaNoRegistrada` si el caller no está registrado.
+        /// - `UsuarioSinRoles` si el caller no tiene el rol adecuado.
+        /// - `ProductoInexistente` si el producto no existe.
+        #[ink(message)]
+        pub fn listar_publicaciones_propias(&self) -> Result<Vec<Publicacion>, ErroresContrato> {
+            let id = self.env().caller();
+            self._usuario_con_rol(VENDEDOR)?;
+            Ok(self._listar_publicaciones_propias(id))
+        }
+
         /// Devuelve una lista de todas las ordenes de compra registradas en el contrato.
         #[ink(message)]
         pub fn listar_ordenes(&self) -> Vec<Orden> {
@@ -450,6 +475,15 @@ mod contract {
             categoria: String,
             stock: u32,
         ) -> Result<u32, ErroresContrato> {
+            // 1. valido que el nombre y descripcion no sean vacias
+            if nombre.trim().is_empty() || descripcion.trim().is_empty() {
+                return Err(ErroresContrato::DatosInvalidos);
+            }
+            // 2. valido que el stock no sea 0
+            if stock == 0 {
+                return Err(ErroresContrato::StockInvalido);
+            }
+
             let id = self.productos.len();
             let usuario = self.get_user(&id_vendedor)?;
             if usuario.has_role(VENDEDOR) {
@@ -646,11 +680,15 @@ mod contract {
             resultado
         }
 
-        fn _enviar_orden(&mut self, id_orden: u32) -> Result<(), ErroresContrato> {
+        fn _enviar_orden(&mut self, id_orden: u32, id_vendedor: AccountId) -> Result<(), ErroresContrato> {
             let mut orden = self
                 .ordenes
                 .get(id_orden)
                 .ok_or(ErroresContrato::OrdenInexistente)?;
+
+            if id_vendedor != orden.id_vendedor {
+                return Err(ErroresContrato::NoEsVendedorOriginal);
+            }
 
             match orden.status {
                 EstadoOrden::Pendiente => {
@@ -662,12 +700,16 @@ mod contract {
             }
         }
 
-        fn _recibir_orden(&mut self, id_orden: u32) -> Result<(), ErroresContrato> {
+        fn _recibir_orden(&mut self, id_orden: u32, id_comprador:AccountId) -> Result<(), ErroresContrato> {
             let mut orden = self
                 .ordenes
                 .get(id_orden)
                 .ok_or(ErroresContrato::OrdenInexistente)?;
 
+            if id_comprador != orden.id_comprador {
+                return Err(ErroresContrato::NoEsCompradorOriginal);
+            }
+                
             match orden.status {
                 EstadoOrden::Enviada => {
                     orden.status = EstadoOrden::Recibida;
@@ -703,6 +745,15 @@ mod contract {
             stock: u32,
             precio: Balance,
         ) -> Result<u32, ErroresContrato> {
+            // 1. valido que el stock no sea 0unidades
+            if stock == 0 {
+                return Err(ErroresContrato::StockInvalido);
+            }
+            // 2. valido que el precio no sea $0
+            if precio == 0 {
+                return Err(ErroresContrato::PrecioInvalido);
+            }
+
             let id = self.publicaciones.len();
             let usuario = self.get_user(&id_usuario)?;
             if usuario.has_role(VENDEDOR) {
@@ -720,6 +771,18 @@ mod contract {
             for i in 0..self.publicaciones.len() {
                 if let Some(publi) = self.publicaciones.get(i) {
                     resultado.push(publi);
+                }
+            }
+            resultado
+        }
+
+        fn _listar_publicaciones_propias(&self, id_usuario: AccountId) -> Vec<Publicacion> {
+            let mut resultado = Vec::new();
+            for i in 0..self.publicaciones.len() {
+                if let Some(publi) = self.publicaciones.get(i) {
+                    if publi.id_user == id_usuario {
+                        resultado.push(publi);
+                    }
                 }
             }
             resultado
@@ -762,7 +825,6 @@ mod contract {
             }
         }
     }
-
     impl GestionCategoria for Sistema {
         fn _registrar_categoria(&mut self, nombre: String) -> Result<String, ErroresContrato> {
             if self.get_categoria_by_name(&nombre).is_ok() {
@@ -1198,7 +1260,7 @@ mod tests {
 
         assert!(res.is_ok());
 
-        let retorno = sistema._listar_publicaciones()[0].clone();
+        let retorno = sistema._listar_publicaciones_propias(id)[0].clone();
         assert_eq!(esperado, retorno);
     }
 
@@ -2257,17 +2319,22 @@ mod tests {
 
         //Creo publicación
         contrato._registrar_categoria("Libros".to_string()).unwrap();
-        contrato._crear_producto(vendedor, "Rust".to_string(), "Desc".to_string(), "Libros".to_string(), 5).unwrap();
+        contrato
+            ._crear_producto(
+                vendedor,
+                "Rust".to_string(),
+                "Desc".to_string(),
+                "Libros".to_string(),
+                5,
+            )
+            .unwrap();
         contrato._crear_publicacion(0, vendedor, 5, 100).unwrap();
-
 
         ink::env::test::set_caller::<ink::env::DefaultEnvironment>(comprador);
         contrato.crear_orden(0, 1).unwrap();
 
- 
         ink::env::test::set_caller::<ink::env::DefaultEnvironment>(vendedor);
         contrato.enviar_producto(0).unwrap();
-
 
         ink::env::test::set_caller::<ink::env::DefaultEnvironment>(comprador);
         let res = contrato.recibir_producto(0);
@@ -2275,5 +2342,195 @@ mod tests {
         assert!(res.is_ok());
         let orden = contrato.listar_ordenes()[0].clone();
         assert_eq!(orden.get_status(), EstadoOrden::Recibida);
+    }
+    #[ink::test]
+    fn test_crear_producto_falla_datos_invalidos() {
+        let mut sistema = setup_sistema();
+        let id = id_vendedor();
+        registrar_vendedor(&mut sistema, id);
+        agregar_categoria(&mut sistema, "Ropa");
+
+        // nombre vacio
+        let res_nombre = sistema._crear_producto(id, "".into(), "desc".into(), "Ropa".into(), 10);
+        assert_eq!(res_nombre, Err(ErroresContrato::DatosInvalidos));
+
+        // descripcion vacia
+        let res_desc = sistema._crear_producto(id, "Valid".into(), "   ".into(), "Ropa".into(), 10);
+        assert_eq!(res_desc, Err(ErroresContrato::DatosInvalidos));
+    }
+
+    #[ink::test]
+    fn test_crear_producto_falla_stock_cero() {
+        let mut sistema = setup_sistema();
+        let id = id_vendedor();
+        registrar_vendedor(&mut sistema, id);
+        agregar_categoria(&mut sistema, "Ropa");
+
+        // stock 0
+        let res = sistema._crear_producto(id, "Valid".into(), "desc".into(), "Ropa".into(), 0);
+        assert_eq!(res, Err(ErroresContrato::StockInvalido));
+    }
+
+    #[ink::test]
+    fn test_crear_publicacion_falla_valores_cero() {
+        let mut sistema = setup_sistema();
+        let id = id_vendedor();
+        registrar_vendedor(&mut sistema, id);
+        agregar_categoria(&mut sistema, "Ropa");
+        
+        // creo producto valido con 100 unidades
+        sistema._crear_producto(id, "Prod".into(), "D".into(), "Ropa".into(), 100).unwrap();
+
+        // publico con precio = $0
+        let res_precio = sistema._crear_publicacion(0, id, 10, 0);
+        assert_eq!(res_precio, Err(ErroresContrato::PrecioInvalido));
+
+        // publico con stock = 0
+        let res_stock = sistema._crear_publicacion(0, id, 0, 100);
+        assert_eq!(res_stock, Err(ErroresContrato::StockInvalido));
+    }
+
+    #[ink::test]
+    fn test_enviar_orden_vendedor_correcto() {
+        let mut contrato = Sistema::new();
+        let comprador = account_id(AccountKeyring::Alice);
+        let vendedor = account_id(AccountKeyring::Bob);
+
+        // Configurar usuarios y productos
+        registrar_comprador(&mut contrato, comprador);
+        registrar_vendedor(&mut contrato, vendedor);
+        contrato.asignar_rol(Rol::Comprador);
+        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(comprador);
+        contrato.asignar_rol(Rol::Comprador).unwrap();
+        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(vendedor);
+        agregar_categoria(&mut contrato, "Electrónicos");
+        contrato
+            ._crear_producto(vendedor, "Laptop".into(), "Gaming laptop".into(), "Electrónicos".into(), 5)
+            .unwrap();
+        contrato._crear_publicacion(0, vendedor, 2, 1000).unwrap();
+
+        // Crear orden como comprador
+        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(comprador);
+        contrato.crear_orden(0, 1).unwrap();
+
+        // Enviar orden como vendedor (debe funcionar)
+        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(vendedor);
+        let res = contrato.enviar_producto(0);
+
+        assert!(res.is_ok());
+        let orden = contrato.listar_ordenes()[0].clone();
+        assert_eq!(orden.get_status(), EstadoOrden::Enviada);
+    }
+
+    #[ink::test]
+    fn test_enviar_orden_vendedor_incorrecto() {
+        let mut contrato = Sistema::new();
+        let comprador = account_id(AccountKeyring::Alice);
+        let vendedor_original = account_id(AccountKeyring::Bob);
+        let vendedor_intruso = account_id(AccountKeyring::Charlie);
+
+        // Configurar usuarios y productos
+        registrar_comprador(&mut contrato, comprador);
+        registrar_vendedor(&mut contrato, vendedor_original);
+        // Registrar segundo vendedor con email diferente
+        contrato._registrar_usuario(vendedor_intruso, "Vendedor2".into(), "vendedor2@gmail.com".into()).unwrap();
+        contrato._asignar_rol(vendedor_intruso, Rol::Vendedor).unwrap();
+        
+        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(comprador);
+        contrato.asignar_rol(Rol::Comprador).unwrap();
+        
+        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(vendedor_original);
+        agregar_categoria(&mut contrato, "Electrónicos");
+        contrato
+            ._crear_producto(vendedor_original, "Laptop".into(), "Gaming laptop".into(), "Electrónicos".into(), 5)
+            .unwrap();
+        contrato._crear_publicacion(0, vendedor_original, 2, 1000).unwrap();
+
+        // Crear orden como comprador
+        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(comprador);
+        contrato.crear_orden(0, 1).unwrap();
+
+        // Intentar enviar orden como vendedor diferente (debe fallar)
+        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(vendedor_intruso);
+        let res = contrato.enviar_producto(0);
+
+        assert!(matches!(res, Err(ErroresContrato::NoEsVendedorOriginal)));
+    }
+
+    #[ink::test]
+    fn test_recibir_orden_comprador_correcto() {
+        let mut contrato = Sistema::new();
+        let comprador = account_id(AccountKeyring::Alice);
+        let vendedor = account_id(AccountKeyring::Bob);
+
+        // Configurar usuarios y productos
+        registrar_comprador(&mut contrato, comprador);
+        registrar_vendedor(&mut contrato, vendedor);
+        
+        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(comprador);
+        contrato.asignar_rol(Rol::Comprador).unwrap();
+        
+        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(vendedor);
+        agregar_categoria(&mut contrato, "Electrónicos");
+        contrato
+            ._crear_producto(vendedor, "Laptop".into(), "Gaming laptop".into(), "Electrónicos".into(), 5)
+            .unwrap();
+        contrato._crear_publicacion(0, vendedor, 2, 1000).unwrap();
+
+        // Crear y enviar orden
+        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(comprador);
+        contrato.crear_orden(0, 1).unwrap();
+
+        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(vendedor);
+        contrato.enviar_producto(0).unwrap();
+
+        // Recibir orden como comprador correcto (debe funcionar)
+        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(comprador);
+        let res = contrato.recibir_producto(0);
+
+        assert!(res.is_ok());
+        let orden = contrato.listar_ordenes()[0].clone();
+        assert_eq!(orden.get_status(), EstadoOrden::Recibida);
+    }
+
+    #[ink::test]
+    fn test_recibir_orden_comprador_incorrecto() {
+        let mut contrato = Sistema::new();
+        let comprador_original = account_id(AccountKeyring::Alice);
+        let comprador_intruso = account_id(AccountKeyring::Charlie);
+        let vendedor = account_id(AccountKeyring::Bob);
+
+        // Configurar usuarios y productos
+        registrar_comprador(&mut contrato, comprador_original);
+        // Registrar segundo comprador con email diferente
+        contrato._registrar_usuario(comprador_intruso, "Comprador2".into(), "comprador2@gmail.com".into()).unwrap();
+        registrar_vendedor(&mut contrato, vendedor);
+        
+        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(comprador_original);
+        contrato.asignar_rol(Rol::Comprador).unwrap();
+        
+        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(comprador_intruso);
+        contrato.asignar_rol(Rol::Comprador).unwrap();
+        
+        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(vendedor);
+        agregar_categoria(&mut contrato, "Electrónicos");
+        contrato
+            ._crear_producto(vendedor, "Laptop".into(), "Gaming laptop".into(), "Electrónicos".into(), 5)
+            .unwrap();
+        contrato._crear_publicacion(0, vendedor, 2, 1000).unwrap();
+
+        // Crear orden como comprador original
+        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(comprador_original);
+        contrato.crear_orden(0, 1).unwrap();
+
+        // Enviar orden como vendedor
+        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(vendedor);
+        contrato.enviar_producto(0).unwrap();
+
+        // Intentar recibir orden como comprador diferente (debe fallar)
+        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(comprador_intruso);
+        let res = contrato.recibir_producto(0);
+
+        assert!(matches!(res, Err(ErroresContrato::NoEsCompradorOriginal)));
     }
 }
