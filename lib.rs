@@ -4,7 +4,7 @@
 mod contract {
     use ink::{
         prelude::{string::String, vec::Vec},
-        storage::{traits::StorageLayout, Mapping, StorageVec},
+        storage::{Mapping, StorageVec, traits::StorageLayout}, xcm::v2::Junction::AccountId32,
     };
     use scale::{Decode, Encode};
     use scale_info::TypeInfo;
@@ -35,6 +35,8 @@ mod contract {
         CuentaNoRegistrada,
         MailYaExistente,
         MailInexistente,
+        NoEsCompradorOriginal,
+        NoEsVendedorOriginal,
         ProductoInexistente,
         ProductoYaExistente,
         PublicacionNoExiste,
@@ -101,9 +103,9 @@ mod contract {
 
         fn _listar_ordenes(&self) -> Vec<Orden>;
 
-        fn _enviar_orden(&mut self, id_orden: u32) -> Result<(), ErroresContrato>;
+        fn _enviar_orden(&mut self, id_orden: u32, id_vendedor: AccountId) -> Result<(), ErroresContrato>;
 
-        fn _recibir_orden(&mut self, id_orden: u32) -> Result<(), ErroresContrato>;
+        fn _recibir_orden(&mut self, id_orden: u32, id_comprador: AccountId) -> Result<(), ErroresContrato>;
 
         //fn _cancelar_orden(&mut self, id_orden: u32) -> Result<(), ErroresContrato>;
     }
@@ -330,7 +332,8 @@ mod contract {
         pub fn enviar_producto(&mut self, id_orden: u32) -> Result<String, ErroresContrato> {
             // Compruebo que el usuario existe y posee rol de vendedor
             self._usuario_con_rol(VENDEDOR)?;
-            self._enviar_orden(id_orden)?;
+            let id_vendedor = self.env().caller();
+            self._enviar_orden(id_orden, id_vendedor)?;
             Ok(String::from("La orden fue enviada correctamente"))
         }
 
@@ -351,7 +354,8 @@ mod contract {
         pub fn recibir_producto(&mut self, id_orden: u32) -> Result<String, ErroresContrato> {
             // Compruebo que el usuario existe y posee rol de vendedor
             self._usuario_con_rol(COMPRADOR)?;
-            self._recibir_orden(id_orden)?;
+            let id_comprador = self.env().caller();
+            self._recibir_orden(id_orden, id_comprador)?;
             Ok(String::from("La orden fue recibida correctamente"))
         }
 
@@ -622,11 +626,15 @@ mod contract {
             resultado
         }
 
-        fn _enviar_orden(&mut self, id_orden: u32) -> Result<(), ErroresContrato> {
+        fn _enviar_orden(&mut self, id_orden: u32, id_vendedor: AccountId) -> Result<(), ErroresContrato> {
             let mut orden = self
                 .ordenes
                 .get(id_orden)
                 .ok_or(ErroresContrato::OrdenInexistente)?;
+
+            if id_vendedor != orden.id_vendedor {
+                return Err(ErroresContrato::NoEsVendedorOriginal);
+            }
 
             match orden.status {
                 EstadoOrden::Pendiente => {
@@ -638,12 +646,16 @@ mod contract {
             }
         }
 
-        fn _recibir_orden(&mut self, id_orden: u32) -> Result<(), ErroresContrato> {
+        fn _recibir_orden(&mut self, id_orden: u32, id_comprador:AccountId) -> Result<(), ErroresContrato> {
             let mut orden = self
                 .ordenes
                 .get(id_orden)
                 .ok_or(ErroresContrato::OrdenInexistente)?;
 
+            if id_comprador != orden.id_comprador {
+                return Err(ErroresContrato::NoEsCompradorOriginal);
+            }
+                
             match orden.status {
                 EstadoOrden::Enviada => {
                     orden.status = EstadoOrden::Recibida;
@@ -2189,5 +2201,149 @@ mod tests {
         assert!(res.is_ok());
         let orden = contrato.listar_ordenes()[0].clone();
         assert_eq!(orden.get_status(), EstadoOrden::Recibida);
+    }
+
+    #[ink::test]
+    fn test_enviar_orden_vendedor_correcto() {
+        let mut contrato = Sistema::new();
+        let comprador = account_id(AccountKeyring::Alice);
+        let vendedor = account_id(AccountKeyring::Bob);
+
+        // Configurar usuarios y productos
+        registrar_comprador(&mut contrato, comprador);
+        registrar_vendedor(&mut contrato, vendedor);
+        contrato.asignar_rol(Rol::Comprador);
+        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(comprador);
+        contrato.asignar_rol(Rol::Comprador).unwrap();
+        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(vendedor);
+        agregar_categoria(&mut contrato, "Electrónicos");
+        contrato
+            ._crear_producto(vendedor, "Laptop".into(), "Gaming laptop".into(), "Electrónicos".into(), 5)
+            .unwrap();
+        contrato._crear_publicacion(0, vendedor, 2, 1000).unwrap();
+
+        // Crear orden como comprador
+        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(comprador);
+        contrato.crear_orden(0, 1).unwrap();
+
+        // Enviar orden como vendedor (debe funcionar)
+        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(vendedor);
+        let res = contrato.enviar_producto(0);
+
+        assert!(res.is_ok());
+        let orden = contrato.listar_ordenes()[0].clone();
+        assert_eq!(orden.get_status(), EstadoOrden::Enviada);
+    }
+
+    #[ink::test]
+    fn test_enviar_orden_vendedor_incorrecto() {
+        let mut contrato = Sistema::new();
+        let comprador = account_id(AccountKeyring::Alice);
+        let vendedor_original = account_id(AccountKeyring::Bob);
+        let vendedor_intruso = account_id(AccountKeyring::Charlie);
+
+        // Configurar usuarios y productos
+        registrar_comprador(&mut contrato, comprador);
+        registrar_vendedor(&mut contrato, vendedor_original);
+        // Registrar segundo vendedor con email diferente
+        contrato._registrar_usuario(vendedor_intruso, "Vendedor2".into(), "vendedor2@gmail.com".into()).unwrap();
+        contrato._asignar_rol(vendedor_intruso, Rol::Vendedor).unwrap();
+        
+        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(comprador);
+        contrato.asignar_rol(Rol::Comprador).unwrap();
+        
+        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(vendedor_original);
+        agregar_categoria(&mut contrato, "Electrónicos");
+        contrato
+            ._crear_producto(vendedor_original, "Laptop".into(), "Gaming laptop".into(), "Electrónicos".into(), 5)
+            .unwrap();
+        contrato._crear_publicacion(0, vendedor_original, 2, 1000).unwrap();
+
+        // Crear orden como comprador
+        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(comprador);
+        contrato.crear_orden(0, 1).unwrap();
+
+        // Intentar enviar orden como vendedor diferente (debe fallar)
+        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(vendedor_intruso);
+        let res = contrato.enviar_producto(0);
+
+        assert!(matches!(res, Err(ErroresContrato::NoEsVendedorOriginal)));
+    }
+
+    #[ink::test]
+    fn test_recibir_orden_comprador_correcto() {
+        let mut contrato = Sistema::new();
+        let comprador = account_id(AccountKeyring::Alice);
+        let vendedor = account_id(AccountKeyring::Bob);
+
+        // Configurar usuarios y productos
+        registrar_comprador(&mut contrato, comprador);
+        registrar_vendedor(&mut contrato, vendedor);
+        
+        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(comprador);
+        contrato.asignar_rol(Rol::Comprador).unwrap();
+        
+        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(vendedor);
+        agregar_categoria(&mut contrato, "Electrónicos");
+        contrato
+            ._crear_producto(vendedor, "Laptop".into(), "Gaming laptop".into(), "Electrónicos".into(), 5)
+            .unwrap();
+        contrato._crear_publicacion(0, vendedor, 2, 1000).unwrap();
+
+        // Crear y enviar orden
+        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(comprador);
+        contrato.crear_orden(0, 1).unwrap();
+
+        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(vendedor);
+        contrato.enviar_producto(0).unwrap();
+
+        // Recibir orden como comprador correcto (debe funcionar)
+        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(comprador);
+        let res = contrato.recibir_producto(0);
+
+        assert!(res.is_ok());
+        let orden = contrato.listar_ordenes()[0].clone();
+        assert_eq!(orden.get_status(), EstadoOrden::Recibida);
+    }
+
+    #[ink::test]
+    fn test_recibir_orden_comprador_incorrecto() {
+        let mut contrato = Sistema::new();
+        let comprador_original = account_id(AccountKeyring::Alice);
+        let comprador_intruso = account_id(AccountKeyring::Charlie);
+        let vendedor = account_id(AccountKeyring::Bob);
+
+        // Configurar usuarios y productos
+        registrar_comprador(&mut contrato, comprador_original);
+        // Registrar segundo comprador con email diferente
+        contrato._registrar_usuario(comprador_intruso, "Comprador2".into(), "comprador2@gmail.com".into()).unwrap();
+        registrar_vendedor(&mut contrato, vendedor);
+        
+        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(comprador_original);
+        contrato.asignar_rol(Rol::Comprador).unwrap();
+        
+        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(comprador_intruso);
+        contrato.asignar_rol(Rol::Comprador).unwrap();
+        
+        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(vendedor);
+        agregar_categoria(&mut contrato, "Electrónicos");
+        contrato
+            ._crear_producto(vendedor, "Laptop".into(), "Gaming laptop".into(), "Electrónicos".into(), 5)
+            .unwrap();
+        contrato._crear_publicacion(0, vendedor, 2, 1000).unwrap();
+
+        // Crear orden como comprador original
+        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(comprador_original);
+        contrato.crear_orden(0, 1).unwrap();
+
+        // Enviar orden como vendedor
+        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(vendedor);
+        contrato.enviar_producto(0).unwrap();
+
+        // Intentar recibir orden como comprador diferente (debe fallar)
+        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(comprador_intruso);
+        let res = contrato.recibir_producto(0);
+
+        assert!(matches!(res, Err(ErroresContrato::NoEsCompradorOriginal)));
     }
 }
