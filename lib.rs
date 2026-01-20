@@ -788,8 +788,8 @@ mod contract {
                         return Err(ErroresContrato::YaCalificado)
                     }
                     orden.cal_vendedor = Some(puntaje);
-                    let usuario = self.get_user(id);
-                    usuario.rating.
+                    let usuario = self.get_user(orden.id_vendedor);
+                    usuario.rating.agregar_calificacion_vendedor(puntaje);
                 },
 
                 orden.id_vendedor => {
@@ -797,6 +797,8 @@ mod contract {
                         return Err(ErroresContrato::YaCalificado)
                     }
                     orden.cal_comprador = Some(puntaje);
+                    let usuario = self.get_user(orden.id_comprador);
+                    usuario.rating.agregar_calificacino_comprador(puntaje);
                 },
 
                 _=> (), 
