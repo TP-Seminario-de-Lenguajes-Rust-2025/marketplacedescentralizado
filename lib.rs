@@ -379,7 +379,7 @@ mod contract {
         /// Cancela una orden pendiente o aún no enviada.
         ///
         /// # Parámetros
-        /// - `id_orden`: ID de la orden a cancelar.listar_publicaciones_propias
+        /// - `id_orden`: ID de la orden a cancelar.listar_publicaciones_propias // WARN
         ///
         /// # Requisitos
         /// - El caller debe estar registrado y tener rol de `Comprador`.
@@ -399,7 +399,21 @@ mod contract {
         // }
 
         /// Asigna una calificación según el rol del Usuario
-        /// TODO
+        /// 
+        /// # Parámetros
+        /// - `id_orden`: Id de la orden a calificar
+        /// - `puntaje`: puntaje a otorgar a la orden
+        /// 
+        /// # Requisitos
+        /// - Debe existir una orden con el id provisto
+        /// - El caller debe estar registrado y estar relacionado a la orden con algún rol
+        /// 
+        /// # Errores
+        /// - `PuntajeInvalido` si el puntaje no es entre 1 y 5
+        /// - `OrdenNoRecibida` si el estado de la orden no es "Recibida"
+        /// - `YaCalificado` si el usuario ya ha calificado la orden previamente
+        /// - `UsuarioNoCorresponde` si el usuario no es comprador ni vendedor de la orden
+        /// - `OrdenInexistente` si la orden no existe
         /// 
         #[ink(message)]
         pub fn calificar_compra(&mut self, id_orden: u32, puntaje: u8) -> Result<String, ErroresContrato> {
