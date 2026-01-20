@@ -775,9 +775,6 @@ mod contract {
                 .ordenes
                 .get(id_orden)
                 .ok_or(ErroresContrato::OrdenInexistente)?;
-            if orden.id_comprador != id || orden.id_vendedor != id {
-                return Err(ErroresContrato::UsuarioNoCorresponde)
-            }
             if orden.status != EstadoOrden::Recibida {
                 return Err(ErroresContrato::OrdenNoRecibida)
             }
@@ -801,7 +798,7 @@ mod contract {
                     usuario.rating.agregar_calificacino_comprador(puntaje);
                 },
 
-                _=> (), 
+                _=> return Err(ErroresContrato::UsuarioNoCorresponde), 
             }            
             Ok(())
         }
