@@ -58,6 +58,10 @@ mod contract {
         ListaSinProductos,
         NombreUsuarioVacio,
         MailUsuarioVacio,
+        PuntajeInvalido,
+        OrdenNoRecibida,
+        YaCalificado,
+        UsuarioNoCorresponde,
     }
 
     pub trait GestionProducto {
@@ -116,6 +120,8 @@ mod contract {
         fn _recibir_orden(&mut self, id_orden: u32, id_comprador: AccountId) -> Result<(), ErroresContrato>;
 
         //fn _cancelar_orden(&mut self, id_orden: u32) -> Result<(), ErroresContrato>;
+
+        fn _calificar_orden(&mut self, id_orden: u32, id: AccountId, puntaje: u8) -> Result<(), ErroresContrato>;
     }
 
     pub trait GestionPublicacion {
@@ -748,7 +754,38 @@ mod contract {
         // }
 
         fn _calificar_orden(&mut self, id_orden: u32, id:AccountId, puntaje:u8) -> Result<(), ErroresContrato>{
+            if puntaje<1 || puntaje>5 {
+                return Err(ErroresContrato::PuntajeInvalido)
+            }
+            let mut orden = self
+                .ordenes
+                .get(id_orden)
+                .ok_or(ErroresContrato::OrdenInexistente)?;
+            if orden.id_comprador != id || orden.id_vendedor != id {
+                return Err(ErroresContrato::UsuarioNoCorresponde)
+            }
+            if orden.status != EstadoOrden::Recibida {
+                return Err(ErroresContrato::OrdenNoRecibida)
+            }
 
+            match id {
+                orden.id_comprador => {
+                    if orden.cal_vendedor.is_some(){
+                        return Err(ErroresContrato::YaCalificado)
+                    }
+                    orden.cal_vendedor = Some(puntaje);
+                },
+
+                orden.id_vendedor => {
+                    if orden.cal_comprador.is_some(){
+                        return Err(ErroresContrato::YaCalificado)
+                    }
+                    orden.cal_comprador = Some(puntaje);
+                },
+
+                _=> (), 
+            }            
+            Ok(());
         }
 
     }
