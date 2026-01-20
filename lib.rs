@@ -780,7 +780,7 @@ mod contract {
             }
 
             match id {
-                orden.id_comprador => {
+                id if id == orden.id_comprador => {
                     if orden.cal_vendedor.is_some(){
                         return Err(ErroresContrato::YaCalificado)
                     }
@@ -789,7 +789,7 @@ mod contract {
                     usuario.rating.agregar_calificacion_vendedor(puntaje);
                 },
 
-                orden.id_vendedor => {
+                id if id == orden.id_vendedor => {
                     if orden.cal_comprador.is_some(){
                         return Err(ErroresContrato::YaCalificado)
                     }
@@ -798,7 +798,7 @@ mod contract {
                     usuario.rating.agregar_calificacino_comprador(puntaje);
                 },
 
-                _=> return Err(ErroresContrato::UsuarioNoCorresponde), 
+                _ => return Err(ErroresContrato::UsuarioNoCorresponde), 
             }            
             Ok(())
         }
