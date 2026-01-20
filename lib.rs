@@ -2,7 +2,7 @@
 
 #[ink::contract]
 mod contract {
-    use core::{fmt::Error, ops::Add};
+    use core::{fmt::Error, ops::{Add, Div}};
 
     use ink::{
         prelude::{string::String, vec::Vec},
@@ -1015,7 +1015,7 @@ mod contract {
     #[ink::scale_derive(Encode, Decode, TypeInfo)]
     #[derive(Clone)]
     struct Rating {
-        calificacion_comprador: (u32, u32), //cant de compras, valor cumulativo de todas las calificaciones
+        calificacion_comprador: (u32, u32), //valor cumulativo de todas las calificaciones, cant de compras
         calificacion_vendedor: (u32, u32),
     }
 
@@ -1030,8 +1030,8 @@ mod contract {
         }
 
         fn agregar_calificacion_comprador(&mut self, puntaje: u8) -> Result<(), ErroresContrato> {
-            self.calificacion_comprador.0.add(puntaje);
-            self.calificacion_comprador.1.add(1);
+            self.calificacion_comprador.0.saturating_add(puntaje as u32); //deja de sumar al llegar al limite de enteros (de u32 en este caso)
+            self.calificacion_comprador.1.saturating_add(1);
             Ok(())
         }
         
@@ -1041,9 +1041,11 @@ mod contract {
             Ok(())
         }
         
+        fn display(&self) -> Result<(String,String), ErroresContrato> {
+            let cal_c: u32 = self.calificacion_comprador.0*10.div(self.calificacion_comprador.1*10);
+            let cal_v: u32 = self.calificacion_vendedor.0*10.div(self.calificacion_vendedor.1*10);
 
-        fn display(&self) -> Result<(), ErroresContrato> {
-            Ok(())
+            Ok((String::from("Calificacion como comprador: "+cal_c.div(10)+","+cal_c.rem(10)),String::from("Calificacion como vendedor: "+cal_v.div(10)+","+cal_v.rem(10))))
         }
     }
 
