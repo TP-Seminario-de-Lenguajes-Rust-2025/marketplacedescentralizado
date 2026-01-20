@@ -2,7 +2,7 @@
 
 #[ink::contract]
 mod contract {
-    use core::fmt::Error;
+    use core::{fmt::Error, ops::Add};
 
     use ink::{
         prelude::{string::String, vec::Vec},
@@ -788,6 +788,8 @@ mod contract {
                         return Err(ErroresContrato::YaCalificado)
                     }
                     orden.cal_vendedor = Some(puntaje);
+                    let usuario = self.get_user(id);
+                    usuario.rating.
                 },
 
                 orden.id_vendedor => {
@@ -1026,6 +1028,23 @@ mod contract {
                 calificacion_comprador: (0, 0),
                 calificacion_vendedor: (0, 0),
             }
+        }
+
+        fn agregar_calificacion_comprador(&mut self, puntaje: u8) -> Result<(), ErroresContrato> {
+            self.calificacion_comprador.0.add(puntaje);
+            self.calificacion_comprador.1.add(1);
+            Ok(())
+        }
+        
+        fn agregar_calificacion_vendedor(&mut self, puntaje: u8) -> Result<(), ErroresContrato> {
+            self.calificacion_vendedor.0.saturating_add(puntaje as u32);
+            self.calificacion_vendedor.1.saturating_add(1);
+            Ok(())
+        }
+        
+
+        fn display(&self) -> Result<(), ErroresContrato> {
+            Ok(())
         }
     }
 
