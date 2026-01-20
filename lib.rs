@@ -2,6 +2,8 @@
 
 #[ink::contract]
 mod contract {
+    use core::fmt::Error;
+
     use ink::{
         prelude::{string::String, vec::Vec},
         storage::{Mapping, StorageVec, traits::StorageLayout}, xcm::v2::Junction::AccountId32,
@@ -390,6 +392,16 @@ mod contract {
         //     Ok(String::from("La orden fue cancelada correctamente"))
         // }
 
+        /// Asigna una calificación según el rol del Usuario
+        /// TODO
+        /// 
+        #[ink(message)]
+        pub fn calificar_compra(&mut self, id_orden: u32, puntaje: u8) -> Result<String, ErroresContrato> {
+            let id = self.env().caller();
+            self._calificar_orden(id_orden, id, puntaje)?;
+            Ok(String::from("La calificación fue exitosa"))
+        }
+
         ///Asigna un rol al usuario correspondiente al AccountId que lo envía
         ///
         /// # Parámetros
@@ -725,7 +737,6 @@ mod contract {
         //         .ordenes
         //         .get(id_orden)
         //         .ok_or(ErroresContrato::OrdenInexistente)?;
-
         //     match orden.status {
         //         EstadoOrden::Enviada => Err(ErroresContrato::OrdenNoEnviada),
         //         _ => {
@@ -735,6 +746,11 @@ mod contract {
         //         }
         //     }
         // }
+
+        fn _calificar_orden(&mut self, id_orden: u32, id:AccountId, puntaje:u8) -> Result<(), ErroresContrato>{
+
+        }
+
     }
 
     impl GestionPublicacion for Sistema {
