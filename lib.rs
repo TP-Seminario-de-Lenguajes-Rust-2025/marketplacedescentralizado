@@ -1041,7 +1041,7 @@ mod contract {
             Ok(())
         }
         
-        fn display(&self) -> Result<(String,String), ErroresContrato> {
+        fn display(&self) -> Result<(String,String), ErroresContrato> { //esto capaz no este tan bueno para leerlo desde el segundo contrato
             let cal_c: u32 = self.calificacion_comprador.0*10.div(self.calificacion_comprador.1*10);
             let cal_v: u32 = self.calificacion_vendedor.0*10.div(self.calificacion_vendedor.1*10);
 
