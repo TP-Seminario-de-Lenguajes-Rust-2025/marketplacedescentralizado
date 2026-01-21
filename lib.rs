@@ -1045,7 +1045,7 @@ mod contract {
             let cal_c: u32 = self.calificacion_comprador.0*10.div(self.calificacion_comprador.1*10);
             let cal_v: u32 = self.calificacion_vendedor.0*10.div(self.calificacion_vendedor.1*10);
 
-            Ok((String::from("Calificacion como comprador: \n"+cal_c.div(10)+","+cal_c.rem(10)+"\n"),String::from("Calificacion como vendedor: \n"+cal_v.div(10)+","+cal_v.rem(10)+"\n")))
+            Ok((String::from("Calificacion como comprador: \n"+cal_c.div(10).to_str()+","+cal_c.rem(10).to_str()+"\n"),String::from("Calificacion como vendedor: \n"+cal_v.div(10).to_str()+","+cal_v.rem(10).to_str()+"\n")))
         }
     }
 
