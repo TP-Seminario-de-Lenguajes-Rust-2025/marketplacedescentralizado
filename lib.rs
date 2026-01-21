@@ -2,7 +2,7 @@
 
 #[ink::contract]
 mod contract {
-    use core::{fmt::Error, ops::{Add, Div}};
+    use core::{fmt::Error, ops::{Add, Div, Rem}};
 
     use ink::{
         prelude::{string::String, vec::Vec},
