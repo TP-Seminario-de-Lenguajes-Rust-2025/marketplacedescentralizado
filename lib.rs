@@ -2337,6 +2337,38 @@ mod tests {
     }
 
     #[ink::test]
+    fn test_orden_cancelada_con_consenso() {
+        let mut contrato = setup_sistema();
+        let (comprador, vendedor) = build_testing_accounts();
+
+        registrar_vendedor(&mut contrato, vendedor);
+        registrar_comprador(&mut contrato, comprador);
+
+        contrato._registrar_categoria("Libros".to_string()).unwrap();
+        contrato
+            ._crear_producto(
+                vendedor,
+                "Rust".to_string(),
+                "Desc".to_string(),
+                "Libros".to_string(),
+                10,
+            )
+            .unwrap();
+        contrato._crear_publicacion(0, vendedor, 10, 100).unwrap();
+
+        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(comprador);
+        let id_orden = contrato.crear_orden(0, 1).unwrap();
+        assert!(contrato.cancelar_orden(id_orden).is_ok());
+        let orden = contrato.listar_ordenes()[0].clone();
+        assert_eq!(orden.get_status(), EstadoOrden::PreCancelada);
+
+        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(vendedor);
+        assert!(contrato.cancelar_orden(id_orden).is_ok());
+        let orden = contrato.listar_ordenes()[0].clone();
+        assert_eq!(orden.get_status(), EstadoOrden::Cancelada);
+    }
+
+    #[ink::test]
     fn enviar_orden_inexistente_falla() {
         let mut contrato = setup_sistema();
         let vendedor = id_vendedor();
