@@ -62,6 +62,7 @@ mod contract {
         OrdenNoRecibida,
         YaCalificado,
         UsuarioNoCorresponde,
+        NoTieneCalificaciones,
     }
 
     pub trait GestionProducto {
@@ -785,7 +786,7 @@ mod contract {
                         return Err(ErroresContrato::YaCalificado)
                     }
                     orden.cal_vendedor = Some(puntaje);
-                    let usuario = self.get_user(&orden.id_vendedor)?;
+                    let mut usuario = self.get_user(&orden.id_vendedor)?;
                     usuario.rating.agregar_calificacion_vendedor(puntaje);
                 },
 
@@ -794,8 +795,8 @@ mod contract {
                         return Err(ErroresContrato::YaCalificado)
                     }
                     orden.cal_comprador = Some(puntaje);
-                    let usuario = self.get_user(&orden.id_comprador)?;
-                    usuario.rating.agregar_calificacino_comprador(puntaje);
+                    let mut usuario = self.get_user(&orden.id_comprador)?;
+                    usuario.rating.agregar_calificacion_comprador(puntaje);
                 },
 
                 _ => return Err(ErroresContrato::UsuarioNoCorresponde), 
@@ -1029,28 +1030,39 @@ mod contract {
             }
         }
 
-        fn agregar_calificacion_comprador(&mut self, puntaje: u8) -> Result<(), ErroresContrato> {
-            self.calificacion_comprador.0.saturating_add(puntaje as u32); //deja de sumar al llegar al limite de enteros (de u32 en este caso)
-            self.calificacion_comprador.1.saturating_add(1);
-            Ok(())
+        fn agregar_calificacion_comprador(&mut self, puntaje: u8){
+            self.calificacion_comprador.0 = self.calificacion_comprador.0.saturating_add(puntaje as u32); //deja de sumar al llegar al limite de enteros (de u32 en este caso)
+            self.calificacion_comprador.1 = self.calificacion_comprador.1.saturating_add(1);
         }
         
-        fn agregar_calificacion_vendedor(&mut self, puntaje: u8) -> Result<(), ErroresContrato> {
-            self.calificacion_vendedor.0.saturating_add(puntaje as u32);
-            self.calificacion_vendedor.1.saturating_add(1);
-            Ok(())
+        fn agregar_calificacion_vendedor(&mut self, puntaje: u8){
+            self.calificacion_vendedor.0 = self.calificacion_vendedor.0.saturating_add(puntaje as u32);
+            self.calificacion_vendedor.1 = self.calificacion_vendedor.1.saturating_add(1);
         }
-        
-        fn display(&self) -> Result<(String,String), ErroresContrato> { //esto capaz no este tan bueno para leerlo desde el segundo contrato
+
+        fn display_comprador(&self) -> Result<String, ErroresContrato>{
+            if self.calificacion_comprador.1 == 0{
+                return Err(ErroresContrato::NoTieneCalificaciones)
+            }
             let cal_c: u32 = self.calificacion_comprador.0*10.div(self.calificacion_comprador.1*10);
+
+            Ok(format!("Calificacion como comprador: {entero},{decimal}",entero = cal_c.div(10), decimal = cal_c.rem(10)))
+        }
+
+        fn display_vendedor(&self) -> Result<String, ErroresContrato>{
+            if self.calificacion_vendedor.1 == 0{
+                return Err(ErroresContrato::NoTieneCalificaciones)
+            }
             let cal_v: u32 = self.calificacion_vendedor.0*10.div(self.calificacion_vendedor.1*10);
 
-            Ok((
-                format!("Calificacion como comprador: {},{}",cal_c.div(10),cal_c.rem(10)), 
-                format!("Calificacion como vendedor: {},{}"cal_v.div(10),cal_v.rem(10))
-            ))
-            //Ok((String::from("Calificacion como comprador: \n"+cal_c.div(10).to_str()+","+cal_c.rem(10).to_str()+"\n"),String::from("Calificacion como vendedor: \n"+cal_v.div(10).to_str()+","+cal_v.rem(10).to_str()+"\n")))
+            Ok(format!("Calificacion como vendedor: {entero},{decimal}",entero = cal_v.div(10), decimal = cal_v.rem(10)))
         }
+        
+        // fn display(&self) -> Result<(String,String), ErroresContrato> { //esto capaz no este tan bueno para leerlo desde el segundo contrato
+        //     let cal_c : String = self.display_comprador()?;
+        //     let cal_v : String = self.display_vendedor()?;
+        //     Ok((cal_c, cal_v))
+        // }
     }
 
     /// Estructuras relacionadas a producto
