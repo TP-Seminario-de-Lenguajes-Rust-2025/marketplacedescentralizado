@@ -4,7 +4,8 @@
 mod contract {
     use ink::{
         prelude::{string::String, vec::Vec},
-        storage::{Mapping, StorageVec, traits::StorageLayout}, xcm::v2::Junction::AccountId32,
+        storage::{traits::StorageLayout, Mapping, StorageVec},
+        xcm::v2::Junction::AccountId32,
     };
     use scale::{Decode, Encode};
     use scale_info::TypeInfo;
@@ -17,9 +18,9 @@ mod contract {
     #[derive(Debug, PartialEq)]
 
     pub enum ErroresContrato {
-        DatosInvalidos, //nombre o descripcion vacios 
+        DatosInvalidos, //nombre o descripcion vacios
         PrecioInvalido, //precio es  <= 0
-        StockInvalido, //Stock es <= 0
+        StockInvalido,  //Stock es <= 0
         UsuarioSinRoles,
         UsuarioYaExistente,
         UsuarioNoEsComprador,
@@ -32,6 +33,7 @@ mod contract {
         OrdenNoEnviada,
         OrdenYaCancelada,
         OrdenInexistente,
+        CancelacionDeOrdenSinConsenso,
         StockPublicacionInsuficiente,
         StockProductoInsuficiente,
         StockInsuficiente,
@@ -85,7 +87,7 @@ mod contract {
             id: AccountId,
             nombre: String,
             mail: String,
-            rol:Rol,
+            rol: Rol,
         ) -> Result<String, ErroresContrato>;
 
         fn get_user(&mut self, id: &AccountId) -> Result<Usuario, ErroresContrato>;
@@ -109,11 +111,19 @@ mod contract {
 
         fn _listar_ordenes(&self) -> Vec<Orden>;
 
-        fn _enviar_orden(&mut self, id_orden: u32, id_vendedor: AccountId) -> Result<(), ErroresContrato>;
+        fn _enviar_orden(
+            &mut self,
+            id_orden: u32,
+            id_vendedor: AccountId,
+        ) -> Result<(), ErroresContrato>;
 
-        fn _recibir_orden(&mut self, id_orden: u32, id_comprador: AccountId) -> Result<(), ErroresContrato>;
+        fn _recibir_orden(
+            &mut self,
+            id_orden: u32,
+            id_comprador: AccountId,
+        ) -> Result<(), ErroresContrato>;
 
-        //fn _cancelar_orden(&mut self, id_orden: u32) -> Result<(), ErroresContrato>;
+        fn _cancelar_orden(&mut self, id_orden: u32) -> Result<(), ErroresContrato>;
     }
 
     pub trait GestionPublicacion {
@@ -382,13 +392,11 @@ mod contract {
         /// - `CuentaNoRegistrada` si el caller no está registrado.
         /// - `UsuarioSinRoles` si no tiene el rol correspondiente.
         ///
-        // #[ink(message)]
-        // pub fn cancelar_producto(&mut self, id_orden: u32) -> Result<String, ErroresContrato> { //no deberia ser cancelar_orden?
-        //     // Compruebo que el usuario existe y posee rol de vendedor
-        //     self._usuario_con_rol(COMPRADOR)?; //TODO: me parece que habia una logica adicional en el cancelar... CHEQUEAR
-        //     self._cancelar_orden(id_orden)?;
-        //     Ok(String::from("La orden fue cancelada correctamente"))
-        // }
+        #[ink(message)]
+        pub fn cancelar_orden(&mut self, id_orden: u32) -> Result<String, ErroresContrato> {
+            self._cancelar_orden(id_orden)?;
+            Ok(String::from("La orden fue cancelada correctamente"))
+        }
 
         ///Asigna un rol al usuario correspondiente al AccountId que lo envía
         ///
@@ -548,13 +556,13 @@ mod contract {
             rol: Rol,
         ) -> Result<String, ErroresContrato> {
             //Verifico que el usuario, y mail no esten vacios
-            if nombre.is_empty(){
+            if nombre.is_empty() {
                 return Err(ErroresContrato::NombreUsuarioVacio);
             }
-            if mail.is_empty(){
+            if mail.is_empty() {
                 return Err(ErroresContrato::MailUsuarioVacio);
             }
-            
+
             // Verifico que el usuario y el mail no existan
             if self.get_user(&id).is_ok() {
                 return Err(ErroresContrato::UsuarioYaExistente);
@@ -566,8 +574,6 @@ mod contract {
 
             // Instancio nuevo usuario
             let usuario = Usuario::new(id, nombre, mail);
-            
-
 
             // Inserto el usuario tanto en el Mapping como en el Vec
             self.m_usuarios.insert(id, &usuario);
@@ -617,15 +623,15 @@ mod contract {
 
         fn _asignar_rol(&mut self, id: AccountId, rol: Rol) -> Result<String, ErroresContrato> {
             let mut usuario = self.get_user(&id)?;
-            if rol==Rol::Ambos{
-                let rol1:Result<String, ErroresContrato> = self._asignar_rol(id, Rol::Vendedor);
-                let rol2:Result<String, ErroresContrato> = self._asignar_rol(id, Rol::Comprador);
-                if rol1.is_ok()||rol2.is_ok(){
+            if rol == Rol::Ambos {
+                let rol1: Result<String, ErroresContrato> = self._asignar_rol(id, Rol::Vendedor);
+                let rol2: Result<String, ErroresContrato> = self._asignar_rol(id, Rol::Comprador);
+                if rol1.is_ok() || rol2.is_ok() {
                     return Ok(String::from("roles agregados correctamente"));
-                }else{
+                } else {
                     return Err(ErroresContrato::AlreadyHasRol);
                 }
-            }else if usuario.has_role(rol.clone()) {
+            } else if usuario.has_role(rol.clone()) {
                 return Err(ErroresContrato::AlreadyHasRol);
             }
             usuario.roles.push(rol);
@@ -680,7 +686,11 @@ mod contract {
             resultado
         }
 
-        fn _enviar_orden(&mut self, id_orden: u32, id_vendedor: AccountId) -> Result<(), ErroresContrato> {
+        fn _enviar_orden(
+            &mut self,
+            id_orden: u32,
+            id_vendedor: AccountId,
+        ) -> Result<(), ErroresContrato> {
             let mut orden = self
                 .ordenes
                 .get(id_orden)
@@ -700,7 +710,11 @@ mod contract {
             }
         }
 
-        fn _recibir_orden(&mut self, id_orden: u32, id_comprador:AccountId) -> Result<(), ErroresContrato> {
+        fn _recibir_orden(
+            &mut self,
+            id_orden: u32,
+            id_comprador: AccountId,
+        ) -> Result<(), ErroresContrato> {
             let mut orden = self
                 .ordenes
                 .get(id_orden)
@@ -709,7 +723,7 @@ mod contract {
             if id_comprador != orden.id_comprador {
                 return Err(ErroresContrato::NoEsCompradorOriginal);
             }
-                
+
             match orden.status {
                 EstadoOrden::Enviada => {
                     orden.status = EstadoOrden::Recibida;
@@ -720,21 +734,29 @@ mod contract {
             }
         }
 
-        // fn _cancelar_orden(&mut self, id_orden: u32) -> Result<(), ErroresContrato> {
-        //     let mut orden = self
-        //         .ordenes
-        //         .get(id_orden)
-        //         .ok_or(ErroresContrato::OrdenInexistente)?;
+        fn _cancelar_orden(&mut self, id_orden: u32) -> Result<(), ErroresContrato> {
+            let mut orden = self
+                .ordenes
+                .get(id_orden)
+                .ok_or(ErroresContrato::OrdenInexistente)?;
 
-        //     match orden.status {
-        //         EstadoOrden::Enviada => Err(ErroresContrato::OrdenNoEnviada),
-        //         _ => {
-        //             orden.status = EstadoOrden::Recibida;
-        //             self.ordenes.set(id_orden, &orden);
-        //             Ok(())
-        //         }
-        //     }
-        // }
+            if self._usuario_con_rol(COMPRADOR).is_ok() {
+                orden.status = EstadoOrden::PreCancelada;
+                self.ordenes.set(id_orden, &orden);
+                Ok(())
+            } else if self._usuario_con_rol(VENDEDOR).is_ok() {
+                match orden.status {
+                    EstadoOrden::PreCancelada => {
+                        orden.status = EstadoOrden::Cancelada;
+                        self.ordenes.set(id_orden, &orden);
+                        Ok(())
+                    }
+                    _ => Err(ErroresContrato::CancelacionDeOrdenSinConsenso),
+                }
+            } else {
+                Err(ErroresContrato::RolNoApropiado)
+            }
+        }
     }
 
     impl GestionPublicacion for Sistema {
@@ -1088,9 +1110,10 @@ mod contract {
     #[ink::scale_derive(Encode, Decode, TypeInfo)]
     pub enum EstadoOrden {
         Pendiente,
-        Enviada,   //solo lo puede modificar el vendedor
-        Recibida,  //solo lo puede modificar el comprador
-        Cancelada, //tienen que estar ambos de acuerdo y tiene que estar en estado pendiente
+        Enviada,      //solo lo puede modificar el vendedor
+        Recibida,     //solo lo puede modificar el comprador
+        PreCancelada, // solo lo puede modificar el comprador
+        Cancelada,    //tienen que estar ambos de acuerdo y tiene que estar en estado pendiente
     }
 
     ///Estructura de orden
@@ -1202,12 +1225,17 @@ mod tests {
 
     //fn de test de agus olthoff
 
-    fn registrar_comprador( 
+    fn registrar_comprador(
         sistema: &mut Sistema,
         id: <DefaultEnvironment as ink::env::Environment>::AccountId,
     ) {
         sistema
-            ._registrar_usuario(id, "Comprador".into(), "comprador@gmail.com".into(), Rol::Comprador)
+            ._registrar_usuario(
+                id,
+                "Comprador".into(),
+                "comprador@gmail.com".into(),
+                Rol::Comprador,
+            )
             .unwrap();
     }
     fn registrar_vendedor(
@@ -1215,18 +1243,27 @@ mod tests {
         id: <DefaultEnvironment as ink::env::Environment>::AccountId,
     ) {
         sistema
-            ._registrar_usuario(id, "Vendedor".into(), "vendedor@gmail.com".into(), Rol::Vendedor)
+            ._registrar_usuario(
+                id,
+                "Vendedor".into(),
+                "vendedor@gmail.com".into(),
+                Rol::Vendedor,
+            )
             .unwrap();
     }
-    fn registrar_usuario_doble( 
+    fn registrar_usuario_doble(
         sistema: &mut Sistema,
         id: <DefaultEnvironment as ink::env::Environment>::AccountId,
     ) {
         sistema
-            ._registrar_usuario(id, "Comprador".into(), "comprador@gmail.com".into(), Rol::Ambos)
+            ._registrar_usuario(
+                id,
+                "Comprador".into(),
+                "comprador@gmail.com".into(),
+                Rol::Ambos,
+            )
             .unwrap();
     }
-    
 
     fn agregar_categoria(sistema: &mut Sistema, nombre: &str) {
         sistema._registrar_categoria(nombre.into()).unwrap();
@@ -1875,7 +1912,7 @@ mod tests {
         agregar_categoria(&mut sistema, "Ropa");
 
         sistema
-            ._crear_producto(id, "Zapatilla".into(), "desc".into(), "Ropa".into(), 5) 
+            ._crear_producto(id, "Zapatilla".into(), "desc".into(), "Ropa".into(), 5)
             .unwrap();
 
         // descuento mas stock de lo que tengo
@@ -1928,11 +1965,25 @@ mod tests {
 
         let user_created = app.listar_usuarios()[0].clone();
 
-        assert!(!user_created.get_name().is_empty(), "nombre de usuario no debe estar vacio");
-        assert!(!user_created.get_mail().is_empty(), "email de usuario no debe estar vacio");
+        assert!(
+            !user_created.get_name().is_empty(),
+            "nombre de usuario no debe estar vacio"
+        );
+        assert!(
+            !user_created.get_mail().is_empty(),
+            "email de usuario no debe estar vacio"
+        );
 
-        assert_eq!(user_created.get_name(), "user_name".to_string(), "el usuario deberia poseer el nombre que fue ingresado");
-        assert_eq!(user_created.get_mail(), "user_email".to_string(), "el usuario deberia poseer el email que fue ingresado");
+        assert_eq!(
+            user_created.get_name(),
+            "user_name".to_string(),
+            "el usuario deberia poseer el nombre que fue ingresado"
+        );
+        assert_eq!(
+            user_created.get_mail(),
+            "user_email".to_string(),
+            "el usuario deberia poseer el email que fue ingresado"
+        );
     }
 
     #[ink::test]
@@ -2017,9 +2068,9 @@ mod tests {
     }
 
     #[ink::test]
-    fn asigna_ambos_roles_correctamente(){
+    fn asigna_ambos_roles_correctamente() {
         let (mut app, user_id_comprador, user_id_vendedor) = build_testing_setup();
-        
+
         assert!(
             app._asignar_rol(user_id_comprador, Rol::Ambos).is_ok(),
             "Se esperaba que se asigne el rol faltante correctamente"
@@ -2146,7 +2197,7 @@ mod tests {
             Err(ErroresContrato::CantidadEnCarritoMenorAUno)
         ));
     }
- 
+
     #[ink::test]
     fn test_crear_orden_sin_rol_comprador_fallido() {
         let mut contrato = setup_sistema();
@@ -2377,9 +2428,11 @@ mod tests {
         let id = id_vendedor();
         registrar_vendedor(&mut sistema, id);
         agregar_categoria(&mut sistema, "Ropa");
-        
+
         // creo producto valido con 100 unidades
-        sistema._crear_producto(id, "Prod".into(), "D".into(), "Ropa".into(), 100).unwrap();
+        sistema
+            ._crear_producto(id, "Prod".into(), "D".into(), "Ropa".into(), 100)
+            .unwrap();
 
         // publico con precio = $0
         let res_precio = sistema._crear_publicacion(0, id, 10, 0);
@@ -2399,14 +2452,20 @@ mod tests {
         // Configurar usuarios y productos
         registrar_comprador(&mut contrato, comprador);
         registrar_vendedor(&mut contrato, vendedor);
-        
+
         // ink::env::test::set_caller::<ink::env::DefaultEnvironment>(comprador);
         // contrato.asignar_rol(Rol::Comprador).unwrap();
-        
+
         ink::env::test::set_caller::<ink::env::DefaultEnvironment>(vendedor);
         agregar_categoria(&mut contrato, "Electrónicos");
         contrato
-            ._crear_producto(vendedor, "Laptop".into(), "Gaming laptop".into(), "Electrónicos".into(), 5)
+            ._crear_producto(
+                vendedor,
+                "Laptop".into(),
+                "Gaming laptop".into(),
+                "Electrónicos".into(),
+                5,
+            )
             .unwrap();
         contrato._crear_publicacion(0, vendedor, 2, 1000).unwrap();
 
@@ -2434,17 +2493,32 @@ mod tests {
         registrar_comprador(&mut contrato, comprador);
         registrar_vendedor(&mut contrato, vendedor_original);
         // Registrar segundo vendedor con email diferente
-        contrato._registrar_usuario(vendedor_intruso, "Vendedor2".into(), "vendedor2@gmail.com".into(), Rol::Vendedor).unwrap();
-        
+        contrato
+            ._registrar_usuario(
+                vendedor_intruso,
+                "Vendedor2".into(),
+                "vendedor2@gmail.com".into(),
+                Rol::Vendedor,
+            )
+            .unwrap();
+
         // ink::env::test::set_caller::<ink::env::DefaultEnvironment>(comprador);
         // contrato.asignar_rol(Rol::Comprador).unwrap();
-        
+
         ink::env::test::set_caller::<ink::env::DefaultEnvironment>(vendedor_original);
         agregar_categoria(&mut contrato, "Electrónicos");
         contrato
-            ._crear_producto(vendedor_original, "Laptop".into(), "Gaming laptop".into(), "Electrónicos".into(), 5)
+            ._crear_producto(
+                vendedor_original,
+                "Laptop".into(),
+                "Gaming laptop".into(),
+                "Electrónicos".into(),
+                5,
+            )
             .unwrap();
-        contrato._crear_publicacion(0, vendedor_original, 2, 1000).unwrap();
+        contrato
+            ._crear_publicacion(0, vendedor_original, 2, 1000)
+            .unwrap();
 
         // Crear orden como comprador
         ink::env::test::set_caller::<ink::env::DefaultEnvironment>(comprador);
@@ -2466,14 +2540,20 @@ mod tests {
         // Configurar usuarios y productos
         registrar_comprador(&mut contrato, comprador);
         registrar_vendedor(&mut contrato, vendedor);
-        
+
         // ink::env::test::set_caller::<ink::env::DefaultEnvironment>(comprador);
         // contrato.asignar_rol(Rol::Comprador).unwrap();
-        
+
         ink::env::test::set_caller::<ink::env::DefaultEnvironment>(vendedor);
         agregar_categoria(&mut contrato, "Electrónicos");
         contrato
-            ._crear_producto(vendedor, "Laptop".into(), "Gaming laptop".into(), "Electrónicos".into(), 5)
+            ._crear_producto(
+                vendedor,
+                "Laptop".into(),
+                "Gaming laptop".into(),
+                "Electrónicos".into(),
+                5,
+            )
             .unwrap();
         contrato._crear_publicacion(0, vendedor, 2, 1000).unwrap();
 
@@ -2503,19 +2583,32 @@ mod tests {
         // Configurar usuarios y productos
         registrar_comprador(&mut contrato, comprador_original);
         // Registrar segundo comprador con email diferente
-        contrato._registrar_usuario(comprador_intruso, "Comprador2".into(), "comprador2@gmail.com".into(), Rol::Comprador).unwrap();
+        contrato
+            ._registrar_usuario(
+                comprador_intruso,
+                "Comprador2".into(),
+                "comprador2@gmail.com".into(),
+                Rol::Comprador,
+            )
+            .unwrap();
         registrar_vendedor(&mut contrato, vendedor);
-        
+
         // ink::env::test::set_caller::<ink::env::DefaultEnvironment>(comprador_original);
         // contrato.asignar_rol(Rol::Comprador).unwrap();
-        
+
         // ink::env::test::set_caller::<ink::env::DefaultEnvironment>(comprador_intruso);
         // contrato.asignar_rol(Rol::Comprador).unwrap();
-        
+
         ink::env::test::set_caller::<ink::env::DefaultEnvironment>(vendedor);
         agregar_categoria(&mut contrato, "Electrónicos");
         contrato
-            ._crear_producto(vendedor, "Laptop".into(), "Gaming laptop".into(), "Electrónicos".into(), 5)
+            ._crear_producto(
+                vendedor,
+                "Laptop".into(),
+                "Gaming laptop".into(),
+                "Electrónicos".into(),
+                5,
+            )
             .unwrap();
         contrato._crear_publicacion(0, vendedor, 2, 1000).unwrap();
 
