@@ -9,7 +9,7 @@ mod contract {
         storage::{Mapping, StorageVec, traits::StorageLayout}, xcm::v2::Junction::AccountId32,
     };
     use scale::{Decode, Encode};
-    use scale_info::TypeInfo;
+    use scale_info::{TypeInfo, prelude::format};
     //use scale_info::prelude::vec::Vec;
 
     pub const COMPRADOR: Rol = Rol::Comprador;
