@@ -785,7 +785,7 @@ mod contract {
                         return Err(ErroresContrato::YaCalificado)
                     }
                     orden.cal_vendedor = Some(puntaje);
-                    let usuario = self.get_user(orden.id_vendedor);
+                    let usuario = self.get_user(&orden.id_vendedor)?;
                     usuario.rating.agregar_calificacion_vendedor(puntaje);
                 },
 
@@ -794,7 +794,7 @@ mod contract {
                         return Err(ErroresContrato::YaCalificado)
                     }
                     orden.cal_comprador = Some(puntaje);
-                    let usuario = self.get_user(orden.id_comprador);
+                    let usuario = self.get_user(&orden.id_comprador)?;
                     usuario.rating.agregar_calificacino_comprador(puntaje);
                 },
 
@@ -1045,7 +1045,11 @@ mod contract {
             let cal_c: u32 = self.calificacion_comprador.0*10.div(self.calificacion_comprador.1*10);
             let cal_v: u32 = self.calificacion_vendedor.0*10.div(self.calificacion_vendedor.1*10);
 
-            Ok((String::from("Calificacion como comprador: \n"+cal_c.div(10).to_str()+","+cal_c.rem(10).to_str()+"\n"),String::from("Calificacion como vendedor: \n"+cal_v.div(10).to_str()+","+cal_v.rem(10).to_str()+"\n")))
+            Ok((
+                format!("Calificacion como comprador: {},{}",cal_c.div(10),cal_c.rem(10)), 
+                format!("Calificacion como vendedor: {},{}"cal_v.div(10),cal_v.rem(10))
+            ))
+            //Ok((String::from("Calificacion como comprador: \n"+cal_c.div(10).to_str()+","+cal_c.rem(10).to_str()+"\n"),String::from("Calificacion como vendedor: \n"+cal_v.div(10).to_str()+","+cal_v.rem(10).to_str()+"\n")))
         }
     }
 
