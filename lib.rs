@@ -788,7 +788,7 @@ mod contract {
                     }
                     orden.cal_vendedor = Some(puntaje);
                     let mut vendedor = self.get_user(&orden.id_vendedor)?;
-                    vendedor.rating.agregar_calificacion_vendedor(puntaje)?;  
+                    vendedor.rating.agregar_calificacion_vendedor(puntaje);  
                     // guardar los datos para tener consistencia en blockchain
                     self.m_usuarios.insert(orden.id_vendedor, &vendedor);
                 },
@@ -799,7 +799,7 @@ mod contract {
                     }
                     orden.cal_comprador = Some(puntaje);
                     let mut comprador = self.get_user(&orden.id_comprador)?;
-                    comprador.rating.agregar_calificacion_comprador(puntaje)?;
+                    comprador.rating.agregar_calificacion_comprador(puntaje);
                     
                     // Guardar los cambios en la blockchain
                     self.m_usuarios.insert(orden.id_comprador, &comprador);
@@ -1051,7 +1051,15 @@ mod contract {
             if self.calificacion_comprador.1 == 0{
                 return Err(ErroresContrato::NoTieneCalificaciones)
             }
-            let cal_c: u32 = self.calificacion_comprador.0*10.div(self.calificacion_comprador.1*10);
+            let cal_c: u32 = (self
+                .calificacion_comprador.0
+                    .checked_mul(10)
+                    .ok_or(ErroresContrato::ErrorMultiplicacion)?)
+                .checked_div(self
+                    .calificacion_comprador.1
+                    .checked_mul(10)
+                    .ok_or(ErroresContrato::ErrorMultiplicacion)?)
+                .ok_or(ErroresContrato::ErrorMultiplicacion)?;
 
             Ok(format!("Calificacion como comprador: {entero},{decimal}",entero = cal_c.div(10), decimal = cal_c.rem(10)))
         }
@@ -1060,7 +1068,15 @@ mod contract {
             if self.calificacion_vendedor.1 == 0{
                 return Err(ErroresContrato::NoTieneCalificaciones)
             }
-            let cal_v: u32 = self.calificacion_vendedor.0*10.div(self.calificacion_vendedor.1*10);
+            let cal_v: u32 = (self
+                .calificacion_vendedor.0
+                    .checked_mul(10)
+                    .ok_or(ErroresContrato::ErrorMultiplicacion)?)
+                .checked_div(self
+                    .calificacion_vendedor.1
+                    .checked_mul(10)
+                    .ok_or(ErroresContrato::ErrorMultiplicacion)?)
+                .ok_or(ErroresContrato::ErrorMultiplicacion)?;
 
             Ok(format!("Calificacion como vendedor: {entero},{decimal}",entero = cal_v.div(10), decimal = cal_v.rem(10)))
         }
