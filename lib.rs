@@ -2,13 +2,18 @@
 
 #[ink::contract]
 mod contract {
+    use core::{
+        fmt::Error,
+        ops::{Add, Div, Rem},
+    };
+
     use ink::{
         prelude::{string::String, vec::Vec},
         storage::{traits::StorageLayout, Mapping, StorageVec},
         xcm::v2::Junction::AccountId32,
     };
     use scale::{Decode, Encode};
-    use scale_info::TypeInfo;
+    use scale_info::{prelude::format, TypeInfo};
     //use scale_info::prelude::vec::Vec;
 
     pub const COMPRADOR: Rol = Rol::Comprador;
@@ -58,6 +63,11 @@ mod contract {
         ListaSinProductos,
         NombreUsuarioVacio,
         MailUsuarioVacio,
+        PuntajeInvalido,
+        OrdenNoRecibida,
+        YaCalificado,
+        UsuarioNoCorresponde,
+        NoTieneCalificaciones,
     }
 
     pub trait GestionProducto {
@@ -124,6 +134,13 @@ mod contract {
         ) -> Result<(), ErroresContrato>;
 
         fn _cancelar_orden(&mut self, id_orden: u32) -> Result<(), ErroresContrato>;
+
+        fn _calificar_orden(
+            &mut self,
+            id_orden: u32,
+            id: AccountId,
+            puntaje: u8,
+        ) -> Result<(), ErroresContrato>;
     }
 
     pub trait GestionPublicacion {
@@ -381,7 +398,7 @@ mod contract {
         /// Cancela una orden pendiente o aún no enviada.
         ///
         /// # Parámetros
-        /// - `id_orden`: ID de la orden a cancelar.listar_publicaciones_propias
+        /// - `id_orden`: ID de la orden a cancelar.listar_publicaciones_propias // WARN
         ///
         /// # Requisitos
         /// - El caller debe estar registrado y tener rol de `Comprador`.
@@ -396,6 +413,34 @@ mod contract {
         pub fn cancelar_orden(&mut self, id_orden: u32) -> Result<String, ErroresContrato> {
             self._cancelar_orden(id_orden)?;
             Ok(String::from("La orden fue cancelada correctamente"))
+        }
+
+        /// Asigna una calificación según el rol del Usuario
+        ///
+        /// # Parámetros
+        /// - `id_orden`: Id de la orden a calificar
+        /// - `puntaje`: puntaje a otorgar a la orden
+        ///
+        /// # Requisitos
+        /// - Debe existir una orden con el id provisto
+        /// - El caller debe estar registrado y estar relacionado a la orden con algún rol
+        ///
+        /// # Errores
+        /// - `PuntajeInvalido` si el puntaje no es entre 1 y 5
+        /// - `OrdenNoRecibida` si el estado de la orden no es "Recibida"
+        /// - `YaCalificado` si el usuario ya ha calificado la orden previamente
+        /// - `UsuarioNoCorresponde` si el usuario no es comprador ni vendedor de la orden
+        /// - `OrdenInexistente` si la orden no existe
+        ///
+        #[ink(message)]
+        pub fn calificar_compra(
+            &mut self,
+            id_orden: u32,
+            puntaje: u8,
+        ) -> Result<String, ErroresContrato> {
+            let id = self.env().caller();
+            self._calificar_orden(id_orden, id, puntaje)?;
+            Ok(String::from("La calificación fue exitosa"))
         }
 
         ///Asigna un rol al usuario correspondiente al AccountId que lo envía
@@ -739,7 +784,6 @@ mod contract {
                 .ordenes
                 .get(id_orden)
                 .ok_or(ErroresContrato::OrdenInexistente)?;
-
             if self._usuario_con_rol(COMPRADOR).is_ok() {
                 orden.status = EstadoOrden::PreCancelada;
                 self.ordenes.set(id_orden, &orden);
@@ -756,6 +800,54 @@ mod contract {
             } else {
                 Err(ErroresContrato::RolNoApropiado)
             }
+        }
+
+        fn _calificar_orden(
+            &mut self,
+            id_orden: u32,
+            id: AccountId,
+            puntaje: u8,
+        ) -> Result<(), ErroresContrato> {
+            if puntaje < 1 || puntaje > 5 {
+                return Err(ErroresContrato::PuntajeInvalido);
+            }
+            let mut orden = self
+                .ordenes
+                .get(id_orden)
+                .ok_or(ErroresContrato::OrdenInexistente)?;
+            if orden.status != EstadoOrden::Recibida {
+                return Err(ErroresContrato::OrdenNoRecibida);
+            }
+
+            match id {
+                id if id == orden.id_comprador => {
+                    // El Comprador califica al Vendedor
+                    if orden.cal_vendedor.is_some() {
+                        return Err(ErroresContrato::YaCalificado);
+                    }
+                    orden.cal_vendedor = Some(puntaje);
+                    let mut vendedor = self.get_user(&orden.id_vendedor)?;
+                    vendedor.rating.agregar_calificacion_vendedor(puntaje);
+                    // guardar los datos para tener consistencia en blockchain
+                    self.m_usuarios.insert(orden.id_vendedor, &vendedor);
+                }
+
+                id if id == orden.id_vendedor => {
+                    if orden.cal_comprador.is_some() {
+                        return Err(ErroresContrato::YaCalificado);
+                    }
+                    orden.cal_comprador = Some(puntaje);
+                    let mut comprador = self.get_user(&orden.id_comprador)?;
+                    comprador.rating.agregar_calificacion_comprador(puntaje);
+
+                    // Guardar los cambios en la blockchain
+                    self.m_usuarios.insert(orden.id_comprador, &comprador);
+                }
+
+                _ => return Err(ErroresContrato::UsuarioNoCorresponde),
+            }
+            self.ordenes.set(id_orden, &orden);
+            Ok(())
         }
     }
 
@@ -917,7 +1009,7 @@ mod contract {
         id: AccountId,
         nombre: String,
         mail: String,
-        rating: Rating,
+        pub rating: Rating,
         roles: Vec<Rol>,
     }
 
@@ -969,8 +1061,8 @@ mod contract {
     #[ink::scale_derive(Encode, Decode, TypeInfo)]
     #[derive(Clone)]
     struct Rating {
-        calificacion_comprador: (u32, u32), //cant de compras, valor cumulativo de todas las calificaciones
-        calificacion_vendedor: (u32, u32),
+        pub calificacion_comprador: (u32, u32), //valor cumulativo de todas las calificaciones, cant de compras
+        pub calificacion_vendedor: (u32, u32),
     }
 
     ///Métodos de usuario
@@ -982,6 +1074,72 @@ mod contract {
                 calificacion_vendedor: (0, 0),
             }
         }
+
+        fn agregar_calificacion_comprador(&mut self, puntaje: u8) {
+            self.calificacion_comprador.0 =
+                self.calificacion_comprador.0.saturating_add(puntaje as u32); //deja de sumar al llegar al limite de enteros (de u32 en este caso)
+            self.calificacion_comprador.1 = self.calificacion_comprador.1.saturating_add(1);
+        }
+
+        fn agregar_calificacion_vendedor(&mut self, puntaje: u8) {
+            self.calificacion_vendedor.0 =
+                self.calificacion_vendedor.0.saturating_add(puntaje as u32);
+            self.calificacion_vendedor.1 = self.calificacion_vendedor.1.saturating_add(1);
+        }
+
+        fn display_comprador(&self) -> Result<String, ErroresContrato> {
+            if self.calificacion_comprador.1 == 0 {
+                return Err(ErroresContrato::NoTieneCalificaciones);
+            }
+            let cal_c: u32 = (self
+                .calificacion_comprador
+                .0
+                .checked_mul(10)
+                .ok_or(ErroresContrato::ErrorMultiplicacion)?)
+            .checked_div(
+                self.calificacion_comprador
+                    .1
+                    .checked_mul(10)
+                    .ok_or(ErroresContrato::ErrorMultiplicacion)?,
+            )
+            .ok_or(ErroresContrato::ErrorMultiplicacion)?;
+
+            Ok(format!(
+                "Calificacion como comprador: {entero},{decimal}",
+                entero = cal_c.div(10),
+                decimal = cal_c.rem(10)
+            ))
+        }
+
+        fn display_vendedor(&self) -> Result<String, ErroresContrato> {
+            if self.calificacion_vendedor.1 == 0 {
+                return Err(ErroresContrato::NoTieneCalificaciones);
+            }
+            let cal_v: u32 = (self
+                .calificacion_vendedor
+                .0
+                .checked_mul(10)
+                .ok_or(ErroresContrato::ErrorMultiplicacion)?)
+            .checked_div(
+                self.calificacion_vendedor
+                    .1
+                    .checked_mul(10)
+                    .ok_or(ErroresContrato::ErrorMultiplicacion)?,
+            )
+            .ok_or(ErroresContrato::ErrorMultiplicacion)?;
+
+            Ok(format!(
+                "Calificacion como vendedor: {entero},{decimal}",
+                entero = cal_v.div(10),
+                decimal = cal_v.rem(10)
+            ))
+        }
+
+        // fn display(&self) -> Result<(String,String), ErroresContrato> { //esto capaz no este tan bueno para leerlo desde el segundo contrato
+        //     let cal_c : String = self.display_comprador()?;
+        //     let cal_v : String = self.display_vendedor()?;
+        //     Ok((cal_c, cal_v))
+        // }
     }
 
     /// Estructuras relacionadas a producto
@@ -1161,6 +1319,18 @@ mod contract {
 
         pub fn get_status(&self) -> EstadoOrden {
             self.status
+        }
+        pub fn get_id_comprador(&self) -> AccountId {
+            self.id_comprador.clone()
+        }
+        pub fn get_id_vendedor(&self) -> AccountId {
+            self.id_vendedor.clone()
+        }
+        pub fn get_calificacion_vendedor(&self) -> Option<u8> {
+            self.cal_vendedor
+        }
+        pub fn get_calificacion_comprador(&self) -> Option<u8> {
+            self.cal_comprador
         }
         //pub fn cambiar_estado
         //fn set_enviada() //solamente puede ser modificada por el vendedor
@@ -2657,5 +2827,132 @@ mod tests {
         let res = contrato.recibir_producto(0);
 
         assert!(matches!(res, Err(ErroresContrato::NoEsCompradorOriginal)));
+    }
+
+    fn setup_orden_recibida() -> (Sistema, u32, AccountId, AccountId) {
+        let mut sistema = setup_sistema();
+        let (comprador, vendedor) = build_testing_accounts();
+
+        // 1. registro usuarios
+        registrar_vendedor(&mut sistema, vendedor);
+        registrar_comprador(&mut sistema, comprador);
+
+        // 2. creo una publicacion
+        agregar_categoria(&mut sistema, "TestCat");
+        sistema
+            ._crear_producto(vendedor, "Prod".into(), "Desc".into(), "TestCat".into(), 10)
+            .unwrap();
+        sistema._crear_publicacion(0, vendedor, 10, 100).unwrap();
+
+        // 3. Creo orden comprador
+        set_caller(comprador);
+        let id_orden = sistema.crear_orden(0, 2).unwrap();
+
+        // 4. Envio orden vendedor
+        set_caller(vendedor);
+        sistema.enviar_producto(id_orden).unwrap();
+
+        // 5. Recibo orden comprador
+        set_caller(comprador);
+        sistema.recibir_producto(id_orden).unwrap();
+
+        (sistema, id_orden, comprador, vendedor)
+    }
+    #[ink::test]
+    fn test_calificar_vendedor_exito() {
+        let (mut sistema, id_orden, comprador, vendedor) = setup_orden_recibida();
+
+        // el comprador califica con 5 estrellas
+        set_caller(comprador);
+        let res = sistema.calificar_compra(id_orden, 5);
+        assert!(res.is_ok(), "La calificación debería ser exitosa");
+        let orden = sistema.listar_ordenes()[0].clone();
+        // Verrificamos que la repu aumento
+        let usuario_vendedor = sistema.get_user(&vendedor).unwrap();
+        // accedemos a la tupla para ver los resultados
+        assert_eq!(
+            usuario_vendedor.rating.calificacion_vendedor.0, 1,
+            "Debería tener 1 calificación"
+        );
+        assert_eq!(
+            usuario_vendedor.rating.calificacion_vendedor.1, 5,
+            "La suma de puntos debería ser 5"
+        );
+    }
+
+    #[ink::test]
+    fn test_calificar_comprador_exito() {
+        let (mut sistema, id_orden, comprador, vendedor) = setup_orden_recibida();
+
+        // calificamos al comprador con 4 estrellas
+        set_caller(vendedor);
+        let res = sistema.calificar_compra(id_orden, 4);
+        assert!(res.is_ok());
+        let usuario_comprador = sistema.get_user(&comprador).unwrap();
+
+        assert_eq!(usuario_comprador.rating.calificacion_comprador.0, 1);
+        assert_eq!(usuario_comprador.rating.calificacion_comprador.1, 4);
+    }
+
+    #[ink::test]
+    fn test_calificar_puntaje_invalido() {
+        let (mut sistema, id_orden, comprador, _) = setup_orden_recibida();
+        set_caller(comprador);
+
+        // puntaje 0 limites
+        let res_cero = sistema.calificar_compra(id_orden, 0);
+        assert_eq!(res_cero, Err(ErroresContrato::PuntajeInvalido));
+
+        // puntaje 6 limites
+        let res_seis = sistema.calificar_compra(id_orden, 6);
+        assert_eq!(res_seis, Err(ErroresContrato::PuntajeInvalido));
+    }
+
+    #[ink::test]
+    fn test_calificar_doble_falla() {
+        let (mut sistema, id_orden, comprador, _) = setup_orden_recibida();
+        set_caller(comprador);
+
+        // califico por primera vez bien
+        sistema.calificar_compra(id_orden, 5).unwrap();
+
+        // califico por segunda vez falla
+        let res = sistema.calificar_compra(id_orden, 3);
+        assert_eq!(res, Err(ErroresContrato::YaCalificado));
+    }
+
+    #[ink::test]
+    fn test_calificar_usuario_ajeno_a_la_orden() {
+        let (mut sistema, id_orden, _, _) = setup_orden_recibida();
+        let intruso = account_id(AccountKeyring::Charlie);
+
+        // creo un pj ajeno a la orden intruso
+        registrar_comprador(&mut sistema, intruso);
+
+        set_caller(intruso);
+        let res = sistema.calificar_compra(id_orden, 5);
+
+        // el intruso califica la orden
+        assert_eq!(res, Err(ErroresContrato::UsuarioNoCorresponde));
+    }
+
+    #[ink::test]
+    fn test_calificar_orden_no_recibida() {
+        // cambio la orden de entregado a pendiente , para que falle
+        let mut sistema = setup_sistema();
+        let (comprador, vendedor) = build_testing_accounts();
+        registrar_vendedor(&mut sistema, vendedor);
+        registrar_comprador(&mut sistema, comprador);
+        agregar_categoria(&mut sistema, "Cat");
+        sistema
+            ._crear_producto(vendedor, "P".into(), "D".into(), "Cat".into(), 10)
+            .unwrap();
+        sistema._crear_publicacion(0, vendedor, 10, 100).unwrap();
+
+        set_caller(comprador);
+        let id_orden = sistema.crear_orden(0, 1).unwrap();
+        // Intento calificar
+        let res = sistema.calificar_compra(id_orden, 5);
+        assert_eq!(res, Err(ErroresContrato::OrdenNoRecibida));
     }
 }
