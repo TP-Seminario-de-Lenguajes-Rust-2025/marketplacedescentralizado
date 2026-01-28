@@ -2801,9 +2801,9 @@ mod tests {
         (sistema, id_orden, comprador, vendedor)
     }
 
-    // #[ink::test]
-    // fn test_calificar_vendedor_exito() {
-    //     let (mut sistema, id_orden, comprador, vendedor) = setup_orden_recibida();
+    #[ink::test]
+    fn test_calificar_vendedor_exito() {
+        let (mut sistema, id_orden, comprador, vendedor) = setup_orden_recibida();
 
         // el comprador califica con 5 estrellas
         set_caller(comprador);
