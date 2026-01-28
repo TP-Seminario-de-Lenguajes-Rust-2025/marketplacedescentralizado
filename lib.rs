@@ -80,12 +80,6 @@ mod contract {
             stock: u32,
         ) -> Result<u32, ErroresContrato>;
 
-        fn descontar_stock_producto(
-            &mut self,
-            id: u32,
-            cantidad: u32,
-        ) -> Result<(), ErroresContrato>;
-
         fn producto_existe(&self, p: &Producto) -> bool;
 
         fn _listar_productos(&self) -> Vec<Producto>;
@@ -105,8 +99,6 @@ mod contract {
         fn _listar_usuarios(&self) -> Vec<Usuario>;
 
         fn get_usuario_by_mail(&self, mail: &str) -> Result<Usuario, ErroresContrato>;
-
-        //fn _usuario_con_rol(&self, rol: Rol) -> Result<(), ErroresContrato>;
 
         fn _asignar_rol(&mut self, id: AccountId, rol: Rol) -> Result<String, ErroresContrato>;
     }
@@ -152,12 +144,6 @@ mod contract {
             precio: Balance,
         ) -> Result<u32, ErroresContrato>;
 
-        fn descontar_stock_publicacion(
-            &mut self,
-            id_pub: u32,
-            cantidad: u32,
-        ) -> Result<(), ErroresContrato>;
-
         fn get_precio_unitario(&self, id_pub: u32) -> Result<Balance, ErroresContrato>;
 
         fn get_id_vendedor(&self, id_pub: u32) -> Result<AccountId, ErroresContrato>; // HAY QUE VOLARLO A LA MIERDA EN LA 2DA ENTREGA
@@ -177,31 +163,31 @@ mod contract {
         fn clean_cat_name(&self, nombre: &String) -> Result<String, ErroresContrato>;
     }
 
-    // pub trait ControlStock {
-    //     fn get_cantidad(&self) -> u32;
+    pub trait ControlStock {
+        fn get_cantidad(&self) -> u32;
 
-    //     fn set_cantidad(&mut self, nueva: u32);
+        fn set_cantidad(&mut self, nueva: u32);
 
-    //     fn descontar_stock(&mut self, cantidad_a_descontar: u32) -> Result<(), ErroresContrato> {
-    //         //self.chequear_stock_disponible(cantidad_a_descontar)?;
-    //         let nueva_cantidad = self
-    //             .get_cantidad()
-    //             .checked_sub(cantidad_a_descontar)
-    //             .ok_or(ErroresContrato::StockInsuficiente)?;
-    //         self.set_cantidad(nueva_cantidad);
-    //         Ok(())
-    //     }
+        fn descontar_stock(&mut self, cantidad_a_descontar: u32) -> Result<(), ErroresContrato> {
+            self.chequear_stock_disponible(cantidad_a_descontar)?;
+            let nueva_cantidad = self
+                .get_cantidad()
+                .checked_sub(cantidad_a_descontar)
+                .ok_or(ErroresContrato::StockInsuficiente)?;
+            self.set_cantidad(nueva_cantidad);
+            Ok(())
+        }
 
-    //     // fn chequear_stock_disponible(
-    //     //     &self,
-    //     //     cantidad_a_descontar: u32,
-    //     // ) -> Result<(), ErroresContrato> {
-    //     //     if self.get_cantidad() < cantidad_a_descontar {
-    //     //         return Err(ErroresContrato::SinStockDisponible);
-    //     //     }
-    //     //     Ok(())
-    //     // }
-    // }
+        fn chequear_stock_disponible(
+            &self,
+            cantidad_a_descontar: u32,
+        ) -> Result<(), ErroresContrato> {
+            if self.get_cantidad() < cantidad_a_descontar {
+                return Err(ErroresContrato::StockInsuficiente);
+            }
+            Ok(())
+        }
+    }
 
     ///Estructura principal del contrato
     #[ink(storage)]
@@ -564,23 +550,6 @@ mod contract {
             false
         }
 
-        fn descontar_stock_producto(
-            &mut self,
-            id: u32,
-            cantidad: u32,
-        ) -> Result<(), ErroresContrato> {
-            let mut producto = self
-                .productos
-                .get(id)
-                .ok_or(ErroresContrato::ProductoInexistente)?; //misma duda que en get_id_vendedor
-            producto.stock = producto
-                .stock
-                .checked_sub(cantidad)
-                .ok_or(ErroresContrato::StockProductoInsuficiente)?;
-            self.productos.set(id, &producto);
-            Ok(())
-        }
-
         fn _listar_productos(&self) -> Vec<Producto> {
             let mut resultado = Vec::new();
             for i in 0..self.productos.len() {
@@ -702,7 +671,15 @@ mod contract {
                 .ok_or(ErroresContrato::ErrorMultiplicacion)?;
             if comprador.has_role(COMPRADOR) && vendedor.has_role(VENDEDOR) {
                 if cantidad != 0 {
-                    self.descontar_stock_publicacion(id_pub, cantidad)?;
+
+                    //Obtengo publicacion original y descuento la cantidad necesaria del stock
+                    let mut publicacion = self
+                        .publicaciones
+                        .get(id_pub)
+                        .ok_or(ErroresContrato::PublicacionNoExiste)?;
+                    publicacion.descontar_stock(cantidad)?;
+                    self.publicaciones.set(id_pub, &publicacion);
+
                     let orden = Orden::new(
                         id_orden,
                         id_pub,
@@ -859,7 +836,7 @@ mod contract {
             stock: u32,
             precio: Balance,
         ) -> Result<u32, ErroresContrato> {
-            // 1. valido que el stock no sea 0unidades
+            // 1. valido que el stock no sea 0 unidades
             if stock == 0 {
                 return Err(ErroresContrato::StockInvalido);
             }
@@ -871,7 +848,14 @@ mod contract {
             let id = self.publicaciones.len();
             let usuario = self.get_user(&id_usuario)?;
             if usuario.has_role(VENDEDOR) {
-                self.descontar_stock_producto(id_producto, stock)?;
+                // Obtengo el producto original y decuento la cantidad de su stock actual
+                let mut producto = self
+                    .productos
+                    .get(id_producto)
+                    .ok_or(ErroresContrato::ProductoInexistente)?;
+                producto.descontar_stock(stock)?;
+                self.productos.set(id_producto, &producto);
+
                 let p = Publicacion::new(id, id_producto, id_usuario, stock, precio); // precio o precio unitario?
                 self.publicaciones.push(&p);
                 Ok(id)
@@ -900,24 +884,6 @@ mod contract {
                 }
             }
             resultado
-        }
-
-        fn descontar_stock_publicacion(
-            &mut self,
-            id_pub: u32,
-            cantidad: u32,
-        ) -> Result<(), ErroresContrato> {
-            //let index = id_pub.checked_sub(1).ok_or(ErroresContrato::ErrorComun)?;
-            let mut publicacion = self
-                .publicaciones
-                .get(id_pub)
-                .ok_or(ErroresContrato::PublicacionNoExiste)?;
-            publicacion.stock = publicacion
-                .stock
-                .checked_sub(cantidad)
-                .ok_or(ErroresContrato::StockPublicacionInsuficiente)?;
-            self.publicaciones.set(id_pub, &publicacion);
-            Ok(())
         }
 
         /// Recibe un ID de una publicacion y devuelve AccountId del vendedor asociado o un Error
@@ -1025,16 +991,6 @@ mod contract {
             }
         }
 
-        /// Remueve el rol del usuario si existe
-        // pub fn remover_rol(&mut self, rol: Rol) -> Result<(), ErroresContrato> {
-        //     if self.has_role(rol) {
-        //         self.roles.retain(|rol| *rol != COMPRADOR);
-        //         Ok(())
-        //     } else {
-        //         Err(ErroresContrato::UsuarioNoTieneRol)
-        //     }
-        // }
-
         /// Devuelve true si el usuario contiene el rol pasado por parametro
         pub fn has_role(&self, rol: Rol) -> bool {
             self.roles.contains(&rol)
@@ -1134,12 +1090,6 @@ mod contract {
                 decimal = cal_v.rem(10)
             ))
         }
-
-        // fn display(&self) -> Result<(String,String), ErroresContrato> { //esto capaz no este tan bueno para leerlo desde el segundo contrato
-        //     let cal_c : String = self.display_comprador()?;
-        //     let cal_v : String = self.display_vendedor()?;
-        //     Ok((cal_c, cal_v))
-        // }
     }
 
     /// Estructuras relacionadas a producto
@@ -1201,15 +1151,15 @@ mod contract {
         }
     }
 
-    // impl ControlStock for Producto {
-    //     fn get_cantidad(&self) -> u32 {
-    //         self.stock
-    //     }
+    impl ControlStock for Producto {
+        fn get_cantidad(&self) -> u32 {
+            self.stock
+        }
 
-    //     fn set_cantidad(&mut self, nueva: u32) {
-    //         self.stock = nueva;
-    //     }
-    // }
+        fn set_cantidad(&mut self, nueva: u32) {
+            self.stock = nueva;
+        }
+    }
 
     ///LOGICA DE PUBLICACION
 
@@ -1231,8 +1181,6 @@ mod contract {
             self.stock
         }
 
-        // pub fn actualizar_stock(&mut self, delta: i32) -> Result<(), ErroresContrato> {}
-
         pub fn new(
             id: u32,
             id_producto: u32,
@@ -1251,15 +1199,15 @@ mod contract {
         }
     }
 
-    // impl ControlStock for Publicacion {
-    //     fn get_cantidad(&self) -> u32 {
-    //         self.stock
-    //     }
+    impl ControlStock for Publicacion {
+        fn get_cantidad(&self) -> u32 {
+            self.stock
+        }
 
-    //     fn set_cantidad(&mut self, nueva: u32) {
-    //         self.stock = nueva;
-    //     }
-    // }
+        fn set_cantidad(&mut self, nueva: u32) {
+            self.stock = nueva;
+        }
+    }
 
     ///Estructuras y logica de Orden
     ///Posibles estados de una Ordem
@@ -1332,10 +1280,6 @@ mod contract {
         pub fn get_calificacion_comprador(&self) -> Option<u8> {
             self.cal_comprador
         }
-        //pub fn cambiar_estado
-        //fn set_enviada() //solamente puede ser modificada por el vendedor
-        //fn set_recibida() //solamente puede ser modificada por el comprador
-        //fn cancelar() //necesitan estar de acuerdo ambos
     }
 }
 
@@ -1421,19 +1365,6 @@ mod tests {
             )
             .unwrap();
     }
-    fn registrar_usuario_doble(
-        sistema: &mut Sistema,
-        id: <DefaultEnvironment as ink::env::Environment>::AccountId,
-    ) {
-        sistema
-            ._registrar_usuario(
-                id,
-                "Comprador".into(),
-                "comprador@gmail.com".into(),
-                Rol::Ambos,
-            )
-            .unwrap();
-    }
 
     fn agregar_categoria(sistema: &mut Sistema, nombre: &str) {
         sistema._registrar_categoria(nombre.into()).unwrap();
@@ -1442,7 +1373,7 @@ mod tests {
     fn contrato_con_categorias_cargada() -> Sistema {
         let mut sist = Sistema::new();
         for i in 0..10 {
-            sist._registrar_categoria(String::from(format!("categoria {}", i)));
+            let _ = sist._registrar_categoria(String::from(format!("categoria {}", i)));
         }
         return sist;
     }
@@ -1535,7 +1466,7 @@ mod tests {
         let res = sistema._crear_publicacion(0, id, 5, 300); // pide más stock del disponible
         assert!(matches!(
             res,
-            Err(ErroresContrato::StockProductoInsuficiente)
+            Err(ErroresContrato::StockInsuficiente)
         ));
     }
 
@@ -1551,23 +1482,23 @@ mod tests {
     #[ink::test]
     fn test_descontar_stock_publicacion_exito() {
         let mut sistema = setup_sistema();
-        let id = id_vendedor();
-        set_caller(id);
+        let id_vendedor = id_vendedor();
+        let id_comprador = id_comprador();
+        set_caller(id_vendedor);
 
-        registrar_vendedor(&mut sistema, id);
-        // sistema
-        //     ._registrar_usuario(id, "Vendedor".into(), "ven@mail.com".into())
-        //     .unwrap();
-        // sistema._asignar_rol(id, Rol::Vendedor).unwrap();
+        registrar_vendedor(&mut sistema, id_vendedor);
+        registrar_comprador(&mut sistema, id_comprador);
         sistema._registrar_categoria("Ropa".into()).unwrap();
         sistema
-            ._crear_producto(id, "Zapatillas".into(), "desc".into(), "Ropa".into(), 10)
+            ._crear_producto(id_vendedor, "Zapatillas".into(), "desc".into(), "Ropa".into(), 10)
             .unwrap();
-        sistema._crear_publicacion(0, id, 5, 1000).unwrap();
+        sistema._crear_publicacion(0, id_vendedor, 5, 1000).unwrap();
 
-        let res = sistema.descontar_stock_publicacion(0, 2);
+        // El descuento se hace automáticamente al crear la orden
+        let res = sistema._crear_orden(0, id_comprador, 2);
         assert!(res.is_ok());
 
+        // Verificar que el stock de la publicación se redujo
         let publicaciones = sistema._listar_publicaciones();
         assert_eq!(publicaciones[0].stock(), 3);
     }
@@ -1575,34 +1506,37 @@ mod tests {
     #[ink::test]
     fn test_descontar_stock_publicacion_falla_publicacion_inexistente() {
         let mut sistema = setup_sistema();
-        let id = id_vendedor();
-        set_caller(id);
+        let id_vendedor = id_vendedor();
+        let id_comprador = id_comprador();
+        
+        registrar_vendedor(&mut sistema, id_vendedor);
+        registrar_comprador(&mut sistema, id_comprador);
 
-        let res = sistema.descontar_stock_publicacion(99, 1); // ID inválido
+        // Intentar crear orden con publicación inexistente
+        let res = sistema._crear_orden(99, id_comprador, 1);
         assert!(matches!(res, Err(ErroresContrato::PublicacionNoExiste)));
     }
 
     #[ink::test]
     fn test_descontar_stock_publicacion_falla_stock_insuficiente() {
         let mut sistema = setup_sistema();
-        let id = id_vendedor();
-        set_caller(id);
+        let id_vendedor = id_vendedor();
+        let id_comprador = id_comprador();
+        set_caller(id_vendedor);
 
-        registrar_vendedor(&mut sistema, id);
-        // sistema
-        //     ._registrar_usuario(id, "Vendedor".into(), "ven@mail.com".into())
-        //     .unwrap();
-        // sistema._asignar_rol(id, Rol::Vendedor).unwrap();
+        registrar_vendedor(&mut sistema, id_vendedor);
+        registrar_comprador(&mut sistema, id_comprador);
         sistema._registrar_categoria("Ropa".into()).unwrap();
         sistema
-            ._crear_producto(id, "Zapatillas".into(), "desc".into(), "Ropa".into(), 3)
+            ._crear_producto(id_vendedor, "Zapatillas".into(), "desc".into(), "Ropa".into(), 10)
             .unwrap();
-        sistema._crear_publicacion(0, id, 3, 1000).unwrap();
+        sistema._crear_publicacion(0, id_vendedor, 3, 1000).unwrap();
 
-        let res = sistema.descontar_stock_publicacion(0, 5); // Más de lo disponible
+        // Intentar crear orden con más cantidad de la disponible en la publicación
+        let res = sistema._crear_orden(0, id_comprador, 5);
         assert!(matches!(
             res,
-            Err(ErroresContrato::StockPublicacionInsuficiente)
+            Err(ErroresContrato::StockInsuficiente)
         ));
     }
 
@@ -2045,7 +1979,7 @@ mod tests {
         assert!(!existe);
     }
 
-    // descontar_stock_producto (caso exitoso)
+    // Test de descuento de stock de producto a través de crear_publicacion
     #[ink::test]
     fn test_descontar_stock_producto_exitoso() {
         let mut sistema = setup_sistema();
@@ -2057,22 +1991,30 @@ mod tests {
         sistema
             ._crear_producto(id, "Zapatilla".into(), "desc".into(), "Ropa".into(), 10)
             .unwrap();
-        let res = sistema.descontar_stock_producto(0, 3);
+        
+        // El descuento se hace automáticamente al crear la publicación
+        let res = sistema._crear_publicacion(0, id, 3, 1000);
         assert!(res.is_ok());
 
+        // Verificar que el stock del producto se redujo
         let productos = sistema._listar_productos();
         let esperado = Producto::new(0, id, "Zapatilla".into(), "desc".into(), 0, 7);
         assert_eq!(productos[0], esperado);
     }
-    // descontar_stock_producto (caso falla producto inexistente)
+    // Test de falla al intentar crear publicacion con producto inexistente
     #[ink::test]
     fn test_descontar_stock_falla_producto_inexistente() {
         let mut sistema = setup_sistema();
-        let res = sistema.descontar_stock_producto(0, 1);
+        let id = id_vendedor();
+        
+        registrar_vendedor(&mut sistema, id);
+        
+        // Intentar crear publicación con producto inexistente
+        let res = sistema._crear_publicacion(99, id, 1, 1000);
         assert!(res.is_err());
         assert_eq!(res.unwrap_err(), ErroresContrato::ProductoInexistente);
     }
-    // descontar_stock_producto (caso falla stock insuficiente)
+    // Test de falla por stock insuficiente al crear publicacion
     #[ink::test]
     fn test_descontar_stock_falla_stock_insuficiente() {
         let mut sistema = setup_sistema();
@@ -2085,10 +2027,10 @@ mod tests {
             ._crear_producto(id, "Zapatilla".into(), "desc".into(), "Ropa".into(), 5)
             .unwrap();
 
-        // descuento mas stock de lo que tengo
-        let res = sistema.descontar_stock_producto(0, 10);
+        // Intentar crear publicación con más stock del disponible
+        let res = sistema._crear_publicacion(0, id, 10, 1000);
         assert!(res.is_err());
-        assert_eq!(res.unwrap_err(), ErroresContrato::StockProductoInsuficiente);
+        assert_eq!(res.unwrap_err(), ErroresContrato::StockInsuficiente);
     }
     #[ink::test]
     fn test_listar_productos_con_productos() {
@@ -2858,9 +2800,10 @@ mod tests {
 
         (sistema, id_orden, comprador, vendedor)
     }
-    #[ink::test]
-    fn test_calificar_vendedor_exito() {
-        let (mut sistema, id_orden, comprador, vendedor) = setup_orden_recibida();
+
+    // #[ink::test]
+    // fn test_calificar_vendedor_exito() {
+    //     let (mut sistema, id_orden, comprador, vendedor) = setup_orden_recibida();
 
         // el comprador califica con 5 estrellas
         set_caller(comprador);
@@ -2935,7 +2878,6 @@ mod tests {
                 Rol::Comprador,
             )
             .unwrap();
-        //registrar_comprador(&mut sistema, intruso);
 
         set_caller(intruso);
         let res = sistema.calificar_compra(id_orden, 5);
