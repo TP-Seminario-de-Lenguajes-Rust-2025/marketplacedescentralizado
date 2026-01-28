@@ -1053,7 +1053,7 @@ mod contract {
     #[cfg_attr(feature = "std", derive(ink::storage::traits::StorageLayout))]
     #[ink::scale_derive(Encode, Decode, TypeInfo)]
     #[derive(Clone)]
-    struct Rating {
+    pub struct Rating {
         pub calificacion_comprador: (u32, u32), //valor cumulativo de todas las calificaciones, cant de compras
         pub calificacion_vendedor: (u32, u32),
     }
@@ -2831,11 +2831,11 @@ mod tests {
         let usuario_vendedor = sistema.get_user(&vendedor).unwrap();
         // accedemos a la tupla para ver los resultados
         assert_eq!(
-            usuario_vendedor.rating.calificacion_vendedor.0, 1,
+            usuario_vendedor.rating.calificacion_vendedor.0, 5,
             "Debería tener 1 calificación"
         );
         assert_eq!(
-            usuario_vendedor.rating.calificacion_vendedor.1, 5,
+            usuario_vendedor.rating.calificacion_vendedor.1, 1,
             "La suma de puntos debería ser 5"
         );
     }
@@ -2850,8 +2850,8 @@ mod tests {
         assert!(res.is_ok());
         let usuario_comprador = sistema.get_user(&comprador).unwrap();
 
-        assert_eq!(usuario_comprador.rating.calificacion_comprador.0, 1);
-        assert_eq!(usuario_comprador.rating.calificacion_comprador.1, 4);
+        assert_eq!(usuario_comprador.rating.calificacion_comprador.0, 4);
+        assert_eq!(usuario_comprador.rating.calificacion_comprador.1, 1);
     }
 
     #[ink::test]
@@ -2887,7 +2887,15 @@ mod tests {
         let intruso = account_id(AccountKeyring::Charlie);
 
         // creo un pj ajeno a la orden intruso
-        registrar_comprador(&mut sistema, intruso);
+        sistema
+            ._registrar_usuario(
+                intruso,
+                "Intruso".into(),
+                "intruso@gmail.com".into(),
+                Rol::Comprador,
+            )
+            .unwrap();
+        //registrar_comprador(&mut sistema, intruso);
 
         set_caller(intruso);
         let res = sistema.calificar_compra(id_orden, 5);
