@@ -100,6 +100,8 @@ mod contract {
 
         fn get_usuario_by_mail(&self, mail: &str) -> Result<Usuario, ErroresContrato>;
 
+        fn get_usuario_by_username(&self, name: &str) -> Result<Usuario, ErroresContrato>;
+
         fn _asignar_rol(&mut self, id: AccountId, rol: Rol) -> Result<String, ErroresContrato>;
     }
 
@@ -577,13 +579,14 @@ mod contract {
                 return Err(ErroresContrato::MailUsuarioVacio);
             }
 
-            // Verifico que el usuario y el mail no existan
-            if self.get_user(&id).is_ok() {
-                return Err(ErroresContrato::UsuarioYaExistente);
-            };
-            //self.get_usuario_by_mail(&mail)?;
+            // Verifico que el email no exista
             if self.get_usuario_by_mail(&mail).is_ok() {
                 return Err(ErroresContrato::MailYaExistente);
+            };
+
+            // Verifico que el usuario no exista
+            if self.get_usuario_by_username(&nombre).is_ok() {
+                return Err(ErroresContrato::UsuarioYaExistente);
             };
 
             // Instancio nuevo usuario
@@ -635,6 +638,25 @@ mod contract {
             Err(ErroresContrato::MailInexistente)
         }
 
+        /// Verifica si ya existe un usuario con un nombre de usuario dado
+        fn get_usuario_by_username(&self, name: &str) -> Result<Usuario, ErroresContrato> {
+            for i in 0..self.v_usuarios.len() {
+                let account_id = self
+                    .v_usuarios
+                    .get(i)
+                    .ok_or(ErroresContrato::IndiceInvalido)?;
+
+                let usuario = self
+                    .m_usuarios
+                    .get(account_id)
+                    .ok_or(ErroresContrato::AccountIdInvalida)?;
+                if usuario.nombre == name {
+                    return Ok(usuario);
+                };
+            }
+            Err(ErroresContrato::UsuarioYaExistente)
+        }
+
         fn _asignar_rol(&mut self, id: AccountId, rol: Rol) -> Result<String, ErroresContrato> {
             let mut usuario = self.get_user(&id)?;
             if rol == Rol::Ambos {
@@ -671,7 +693,6 @@ mod contract {
                 .ok_or(ErroresContrato::ErrorMultiplicacion)?;
             if comprador.has_role(COMPRADOR) && vendedor.has_role(VENDEDOR) {
                 if cantidad != 0 {
-
                     //Obtengo publicacion original y descuento la cantidad necesaria del stock
                     let mut publicacion = self
                         .publicaciones
@@ -1441,10 +1462,7 @@ mod tests {
             .unwrap();
 
         let res = sistema._crear_publicacion(0, id, 5, 300); // pide más stock del disponible
-        assert!(matches!(
-            res,
-            Err(ErroresContrato::StockInsuficiente)
-        ));
+        assert!(matches!(res, Err(ErroresContrato::StockInsuficiente)));
     }
 
     #[ink::test]
@@ -1467,7 +1485,13 @@ mod tests {
         registrar_comprador(&mut sistema, id_comprador);
         sistema._registrar_categoria("Ropa".into()).unwrap();
         sistema
-            ._crear_producto(id_vendedor, "Zapatillas".into(), "desc".into(), "Ropa".into(), 10)
+            ._crear_producto(
+                id_vendedor,
+                "Zapatillas".into(),
+                "desc".into(),
+                "Ropa".into(),
+                10,
+            )
             .unwrap();
         sistema._crear_publicacion(0, id_vendedor, 5, 1000).unwrap();
 
@@ -1485,7 +1509,7 @@ mod tests {
         let mut sistema = setup_sistema();
         let id_vendedor = id_vendedor();
         let id_comprador = id_comprador();
-        
+
         registrar_vendedor(&mut sistema, id_vendedor);
         registrar_comprador(&mut sistema, id_comprador);
 
@@ -1505,16 +1529,19 @@ mod tests {
         registrar_comprador(&mut sistema, id_comprador);
         sistema._registrar_categoria("Ropa".into()).unwrap();
         sistema
-            ._crear_producto(id_vendedor, "Zapatillas".into(), "desc".into(), "Ropa".into(), 10)
+            ._crear_producto(
+                id_vendedor,
+                "Zapatillas".into(),
+                "desc".into(),
+                "Ropa".into(),
+                10,
+            )
             .unwrap();
         sistema._crear_publicacion(0, id_vendedor, 3, 1000).unwrap();
 
         // Intentar crear orden con más cantidad de la disponible en la publicación
         let res = sistema._crear_orden(0, id_comprador, 5);
-        assert!(matches!(
-            res,
-            Err(ErroresContrato::StockInsuficiente)
-        ));
+        assert!(matches!(res, Err(ErroresContrato::StockInsuficiente)));
     }
 
     #[ink::test]
@@ -1952,7 +1979,7 @@ mod tests {
         sistema
             ._crear_producto(id, "Zapatilla".into(), "desc".into(), "Ropa".into(), 10)
             .unwrap();
-        
+
         // El descuento se hace automáticamente al crear la publicación
         let res = sistema._crear_publicacion(0, id, 3, 1000);
         assert!(res.is_ok());
@@ -1967,9 +1994,7 @@ mod tests {
     fn test_descontar_stock_falla_producto_inexistente() {
         let mut sistema = setup_sistema();
         let id = id_vendedor();
-        
         registrar_vendedor(&mut sistema, id);
-        
         // Intentar crear publicación con producto inexistente
         let res = sistema._crear_publicacion(99, id, 1, 1000);
         assert!(res.is_err());
@@ -2057,6 +2082,82 @@ mod tests {
             "user_email".to_string(),
             "el usuario deberia poseer el email que fue ingresado"
         );
+    }
+
+    #[ink::test]
+    fn registra_usuario_nombre_de_usuario_vacio() {
+        let mut app = setup_sistema();
+        let (id_comprador, _) = build_testing_accounts();
+        assert_eq!(
+            app._registrar_usuario(
+                id_comprador,
+                String::new(),
+                "user_email_1".to_string(),
+                Rol::Comprador,
+            ),
+            Err(ErroresContrato::NombreUsuarioVacio)
+        )
+    }
+
+    #[ink::test]
+    fn registra_usuario_mail_vacio() {
+        let mut app = setup_sistema();
+        let (id_comprador, _) = build_testing_accounts();
+        assert_eq!(
+            app._registrar_usuario(
+                id_comprador,
+                "user_name".to_string(),
+                String::new(),
+                Rol::Comprador,
+            ),
+            Err(ErroresContrato::MailUsuarioVacio)
+        )
+    }
+
+    #[ink::test]
+    fn registra_usuario_nombre_ya_existente() {
+        let mut app = setup_sistema();
+        let id = id_vendedor();
+
+        app._registrar_usuario(
+            id,
+            "Vendedor".into(),
+            "vendedor@gmail.com".into(),
+            Rol::Vendedor,
+        )
+        .unwrap();
+        assert_eq!(
+            app._registrar_usuario(
+                id,
+                "Vendedor".into(),
+                "emailvendedor@gmail.com".into(),
+                Rol::Vendedor,
+            ),
+            Err(ErroresContrato::UsuarioYaExistente)
+        )
+    }
+
+    #[ink::test]
+    fn registra_usuario_mail_ya_existente() {
+        let mut app = setup_sistema();
+        let (id_comprador, _) = build_testing_accounts();
+        app._registrar_usuario(
+            id_comprador,
+            "user_name".to_string(),
+            "user_email".to_string(),
+            Rol::Comprador,
+        )
+        .expect("No se pudo registrar el usuario");
+
+        assert_eq!(
+            app._registrar_usuario(
+                id_comprador,
+                "user_name11".to_string(),
+                "user_email".to_string(),
+                Rol::Vendedor,
+            ),
+            Err(ErroresContrato::MailYaExistente)
+        )
     }
 
     #[ink::test]
