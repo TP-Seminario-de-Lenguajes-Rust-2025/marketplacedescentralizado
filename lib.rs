@@ -838,6 +838,7 @@ mod contract {
                 .get(id_orden)
                 .ok_or(ErroresContrato::OrdenInexistente)?;
             if orden.status != EstadoOrden::Recibida {
+                self.ordenes.set(id_orden, &orden);
                 return Err(ErroresContrato::OrdenNoRecibida);
             }
 
@@ -845,6 +846,7 @@ mod contract {
                 id if id == orden.id_comprador => {
                     // El Comprador califica al Vendedor
                     if orden.cal_vendedor.is_some() {
+                        self.ordenes.set(id_orden, &orden);
                         return Err(ErroresContrato::YaCalificado);
                     }
                     orden.cal_vendedor = Some(puntaje);
@@ -852,10 +854,12 @@ mod contract {
                     vendedor.rating.agregar_calificacion_vendedor(puntaje);
                     // guardar los datos para tener consistencia en blockchain
                     self.m_usuarios.insert(orden.id_vendedor, &vendedor);
+                    self.ordenes.set(id_orden, &orden);
                 }
 
                 id if id == orden.id_vendedor => {
                     if orden.cal_comprador.is_some() {
+                        self.ordenes.set(id_orden, &orden);
                         return Err(ErroresContrato::YaCalificado);
                     }
                     orden.cal_comprador = Some(puntaje);
@@ -864,9 +868,13 @@ mod contract {
 
                     // Guardar los cambios en la blockchain
                     self.m_usuarios.insert(orden.id_comprador, &comprador);
+                    self.ordenes.set(id_orden, &orden);
                 }
 
-                _ => return Err(ErroresContrato::UsuarioNoCorresponde),
+                _ => {
+                    self.ordenes.set(id_orden, &orden);
+                    return Err(ErroresContrato::UsuarioNoCorresponde)
+                }
             }
             self.ordenes.set(id_orden, &orden);
             Ok(())
