@@ -779,8 +779,8 @@ mod contract {
                 .ordenes
                 .get(id_orden)
                 .ok_or(ErroresContrato::OrdenInexistente)?;
-
             if id_comprador != orden.id_comprador {
+                self.ordenes.set(id_orden, &orden);
                 return Err(ErroresContrato::NoEsCompradorOriginal);
             }
 
@@ -790,7 +790,10 @@ mod contract {
                     self.ordenes.set(id_orden, &orden);
                     Ok(())
                 }
-                _ => Err(ErroresContrato::OrdenNoEnviada),
+                _ => {
+                    self.ordenes.set(id_orden, &orden);
+                    Err(ErroresContrato::OrdenNoEnviada)
+                },
             }
         }
 
