@@ -241,8 +241,7 @@ mod contract {
             mail: String,
             rol: Rol,
         ) -> Result<String, ErroresContrato> {
-            let id = self.env().caller();
-            self._registrar_usuario(id, nombre, mail, rol)
+            self._registrar_usuario(self.env().caller(), nombre, mail, rol)
         }
 
         /// Publica un producto previamente registrado en el contrato, generando una publicación activa.
@@ -269,8 +268,7 @@ mod contract {
             stock: u32,
             precio: Balance,
         ) -> Result<u32, ErroresContrato> {
-            let id_usuario = self.env().caller();
-            self._crear_publicacion(id_producto, id_usuario, stock, precio)
+            self._crear_publicacion(id_producto, self.env().caller(), stock, precio)
         }
 
         /// Registra una nueva categoría de productos en el contrato.
@@ -318,8 +316,7 @@ mod contract {
             categoria: String,
             stock: u32,
         ) -> Result<u32, ErroresContrato> {
-            let id_vendedor = self.env().caller();
-            self._crear_producto(id_vendedor, nombre, descripcion, categoria, stock)
+            self._crear_producto(self.env().caller(), nombre, descripcion, categoria, stock)
         }
 
         /// Crea una orden de compra sobre una publicación activa.
@@ -347,8 +344,7 @@ mod contract {
             cantidad: u32,
             //precio_total: Decimal
         ) -> Result<u32, ErroresContrato> {
-            let id_comprador = self.env().caller();
-            self._crear_orden(id_pub, id_comprador, cantidad)
+            self._crear_orden(id_pub, self.env().caller(), cantidad)
         }
 
         /// Marca una orden como `Enviada`.
@@ -371,8 +367,7 @@ mod contract {
         pub fn enviar_producto(&mut self, id_orden: u32) -> Result<String, ErroresContrato> {
             // Compruebo que el usuario existe y posee rol de vendedor
             self._usuario_con_rol(VENDEDOR)?;
-            let id_vendedor = self.env().caller();
-            self._enviar_orden(id_orden, id_vendedor)?;
+            self._enviar_orden(id_orden, self.env().caller())?;
             Ok(String::from("La orden fue enviada correctamente"))
         }
 
@@ -396,8 +391,7 @@ mod contract {
         pub fn recibir_producto(&mut self, id_orden: u32) -> Result<String, ErroresContrato> {
             // Compruebo que el usuario existe y posee rol de vendedor
             self._usuario_con_rol(COMPRADOR)?;
-            let id_comprador = self.env().caller();
-            self._recibir_orden(id_orden, id_comprador)?;
+            self._recibir_orden(id_orden, self.env().caller())?;
             Ok(String::from("La orden fue recibida correctamente"))
         }
 
@@ -419,8 +413,7 @@ mod contract {
         /// - `UsuarioNoCorresponde` si el usuario no pertenece a la orden
         #[ink(message)]
         pub fn cancelar_orden(&mut self, id_orden: u32) -> Result<String, ErroresContrato> {
-            let id_usuario = self.env().caller();
-            self._cancelar_orden(id_orden, id_usuario)
+            self._cancelar_orden(id_orden, self.env().caller())
         }
 
         /// Asigna una calificación según el rol del Usuario
@@ -439,6 +432,7 @@ mod contract {
         /// - `YaCalificado` si el usuario ya ha calificado la orden previamente
         /// - `UsuarioNoCorresponde` si el usuario no es comprador ni vendedor de la orden
         /// - `OrdenInexistente` si la orden no existe
+        /// - `UsuarioNoExiste` si uno de los usuarios de la orden dejó de estar registrado
         ///
         #[ink(message)]
         pub fn calificar_compra(
