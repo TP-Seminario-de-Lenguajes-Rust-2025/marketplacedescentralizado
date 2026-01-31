@@ -26,7 +26,6 @@ mod contract {
         DatosInvalidos, //nombre o descripcion vacios
         PrecioInvalido, //precio es  <= 0
         StockInvalido,  //Stock es <= 0
-        UsuarioSinRoles,
         UsuarioYaExistente,
         UsuarioNoEsComprador,
         UsuarioYaEsComprador,
@@ -228,11 +227,13 @@ mod contract {
         /// # Parámetros
         /// - `nombre`: Nombre del usuario.
         /// - `mail`: Correo electrónico del usuario.
-        /// - `roles`: Lista de roles asignados al usuario (Comprador, Vendedor).
+        /// - `roles`: Lista de roles asignados al usuario (`Comprador`, `Vendedor`, Ambos).
         ///
         /// # Errores
         /// - `UsuarioYaExistente` si el usuario ya está registrado.
         /// - `MailYaExistente` si ya hay un usuario registrado con ese mail.
+        /// - `NombreUsuarioVacio` si el campo de nombre se encuentra vacío
+        /// - `MailUsuarioVacio` si el campo de mail se encuentra vacío
         #[ink(message)]
         pub fn registrar_usuario(
             &mut self,
@@ -244,21 +245,23 @@ mod contract {
             self._registrar_usuario(id, nombre, mail, rol)
         }
 
-        /// Registra un nuevo producto en el contrato, asignándolo al AccountId que lo publica.
+        /// Publica un producto previamente registrado en el contrato, generando una publicación activa.
         ///
         /// # Parámetros
-        /// - `nombre`: Nombre del producto.
-        /// - `categoria`: Categoría del producto.
-        /// - `cantidad`: Cantidad disponible.
-        /// - `precio`: Precio unitario.
-        /// - `descripcion`: Descripción del producto.
+        /// - `id_producto`: ID del producto a publicar.
+        /// - `stock`: Cantidad disponible para la publicación.
+        /// - `precio`: El precio unitario del producto para la publicación.
         ///
         /// # Requisitos
-        /// - El usuario debe estar registrado previamente.
+        /// - El caller debe estar registrado y tener rol de `Vendedor`.
         ///
         /// # Errores
-        /// - `CuentaNoRegistrada` si el usuario no está registrado.
-        /// - `ProductoYaExistente` si ya existe un producto con ese nombre y categoría.
+        /// - `ProductoInexistente` si el producto no existe.
+        /// - `UsuarioNoExiste` si el usuario no está registrado en el sistema
+        /// - `StockInvalido` si el stock introducido es 0
+        /// - `PrecioInvalido` si el precio introducido es 0
+        /// - `RolNoApropiado` si el usuario no posee el rol `Vendedor`
+        /// - `StockInsuficiente` si el stock introducido es más de lo disponible del producto
         #[ink(message)]
         pub fn crear_publicacion(
             &mut self,
@@ -274,14 +277,14 @@ mod contract {
         ///
         /// # Parámetros
         /// - `nombre`: Nombre de la categoría a registrar.
-        /// - `descripcion`: Descripción detallada de la categoría.
         ///
         /// # Requisitos
         /// - El caller debe estar previamente registrado como usuario.
         ///
         /// # Errores
-        /// - `CuentaNoRegistrada`: Si el usuario que intenta registrar la categoría no está registrado.
+        /// - `UsuarioNoExiste`: Si el usuario que intenta registrar la categoría no está registrado.
         /// - `CategoriaYaExistente`: Si la categoria ya existe actualmente.
+        /// - `MaxCategoriasAlcanzado`: Si se ha alcanzado la cantidad máxima de categorías posibles para registrar
         #[ink(message)]
         pub fn registrar_categoria(&mut self, nombre: String) -> Result<String, ErroresContrato> {
             // Comprobar que el usuario esta registrado en la plataforma
@@ -289,19 +292,24 @@ mod contract {
             self._registrar_categoria(nombre)
         }
 
-        /// Publica un producto previamente registrado en el contrato, generando una publicación activa.
+        /// Registra un nuevo producto en el contrato, asignándolo al AccountId que lo publica.
         ///
         /// # Parámetros
-        /// - `id_producto`: ID del producto a publicar.
-        /// - `cantidad`: Cantidad disponible para la publicación.
+        /// - `nombre`: Nombre del producto.
+        /// - `descripcion`: Descripción del producto.
+        /// - `categoria`: Categoría del producto.
+        /// - `stock`: Cantidad disponible. 
         ///
         /// # Requisitos
-        /// - El caller debe estar registrado y tener rol de `Vendedor`.
+        /// - El usuario debe estar registrado previamente.
         ///
         /// # Errores
-        /// - `CuentaNoRegistrada` si el caller no está registrado.
-        /// - `UsuarioSinRoles` si el caller no tiene el rol adecuado.
-        /// - `ProductoInexistente` si el producto no existe.
+        /// - `UsuarioNoExiste` si el usuario no está registrado.
+        /// - `ProductoYaExistente` si ya existe un producto con ese nombre y categoría.
+        /// - `DatosInvalidos` si el nombre o la descripción se encuentran vacíos
+        /// - `StockInvalido` si el stock introducido es 0 
+        /// - `UsuarioNoEsVendedor` si el usuario no tiene el rol `Vendedor`
+        /// - `CategoriaInexistente` si la categoría no existe
         #[ink(message)]
         pub fn crear_producto(
             &mut self,
@@ -321,13 +329,17 @@ mod contract {
         /// - `cantidad`: Cantidad solicitada.
         ///
         /// # Requisitos
-        /// - El caller debe estar registrado y tener rol de `Comprador`.
+        /// - El caller debe estar registrado y tener el rol `Comprador`.
+        /// - El usuario que inició la publiacación debe seguir teniendo el rol `Vendedor`
         ///
         /// # Errores
-        /// - `CuentaNoRegistrada` si el caller no está registrado.
-        /// - `UsuarioSinRoles` si no tiene el rol correspondiente.
+        /// - `UsuarioNoExiste` si el caller no está registrado.
+        /// - `RolNoApropiado` si uno o ambos usuarios no tienen los roles apropiados para crear una orden.
         /// - `PublicacionNoExiste` si no existe la publicación.
         /// - `ProductoInexistente` si el producto vinculado a la publicación no existe.
+        /// - `ErrorMultiplicacion` si se produjo un error al multiplicar el precio del producto por la cantidad solicitada.
+        /// - `StockInsuficiente` si el stock de la publicación es menor a lo solicitado en la orden
+        /// - `CantidadEnCarritoMenorAUno` si la cantidad solicitada para comprar es menor a 1
         #[ink(message)]
         pub fn crear_orden(
             &mut self,
@@ -346,12 +358,15 @@ mod contract {
         ///
         /// # Requisitos
         /// - El caller debe estar registrado y tener rol de `Vendedor`.
+        /// - El caller debe tener una orden asociada como vendedor
+        /// - La orden debe estar en estado `Pendiente`
         ///
         /// # Errores
         /// - `OrdenInexistente` si no existe la orden.
         /// - `OrdenNoPendiente` si la orden ya fue enviada, recibida o cancelada.
         /// - `CuentaNoRegistrada` si el caller no está registrado.
-        /// - `UsuarioSinRoles` si no tiene el rol correspondiente.
+        /// - `RolNoApropiado` si el usuario no tiene el rol de `Vendedor`
+        /// - `NoEsVendedorOriginal` si el usuario no corresponde con el vendedor que inició la orden
         #[ink(message)]
         pub fn enviar_producto(&mut self, id_orden: u32) -> Result<String, ErroresContrato> {
             // Compruebo que el usuario existe y posee rol de vendedor
@@ -368,12 +383,15 @@ mod contract {
         ///
         /// # Requisitos
         /// - El caller debe estar registrado y tener rol de `Comprador`.
+        /// - El caller debe tener una orden asociada como comprador
+        /// - La orden debe estar en estado `Enviada`
         ///
         /// # Errores
         /// - `OrdenInexistente` si no existe la orden.
-        /// - `OrdenNoEnviada` si la orden aún no fue enviada.
+        /// - `OrdenNoEnviada` si la orden aún no fue enviada, ya fue recibida, o fue cancelada.
         /// - `CuentaNoRegistrada` si el caller no está registrado.
-        /// - `UsuarioSinRoles` si no tiene el rol correspondiente.
+        /// - `RolNoApropiado` si el usuario no tiene el rol de `Comprador`
+        /// - `NoEsCompradorOriginal` si el usuario no es el comprador que inició la orden
         #[ink(message)]
         pub fn recibir_producto(&mut self, id_orden: u32) -> Result<String, ErroresContrato> {
             // Compruebo que el usuario existe y posee rol de vendedor
@@ -386,17 +404,17 @@ mod contract {
         /// Cancela una orden pendiente o aún no enviada.
         ///
         /// # Parámetros
-        /// - `id_orden`: ID de la orden a cancelar.listar_publicaciones_propias // WARN
+        /// - `id_orden`: ID de la orden a cancelar
         ///
         /// # Requisitos
         /// - El caller debe estar registrado y tener rol de `Comprador`.
+        /// - El caller debe tener una orden asociada
         ///
         /// # Errores
         /// - `OrdenInexistente` si la orden no existe.
         /// - `OrdenYaCancelada` si ya fue cancelada previamente.
         /// - `CuentaNoRegistrada` si el caller no está registrado.
-        /// - `UsuarioSinRoles` si no tiene el rol correspondiente.
-        ///
+        /// - `CancelacionDeOrdenSinConsenso` si el vendedor intenta cancelar la orden antes que el comprador
         #[ink(message)]
         pub fn cancelar_orden(&mut self, id_orden: u32) -> Result<String, ErroresContrato> {
             self._cancelar_orden(id_orden)?;
@@ -473,7 +491,6 @@ mod contract {
         ///
         /// # Errores
         /// - `CuentaNoRegistrada` si el caller no está registrado.
-        /// - `UsuarioSinRoles` si el caller no tiene el rol adecuado.
         /// - `ProductoInexistente` si el producto no existe.
         #[ink(message)]
         pub fn listar_publicaciones_propias(&self) -> Result<Vec<Publicacion>, ErroresContrato> {
