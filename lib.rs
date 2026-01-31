@@ -126,7 +126,7 @@ mod contract {
             id_comprador: AccountId,
         ) -> Result<(), ErroresContrato>;
 
-        fn _cancelar_orden(&mut self, id_orden: u32) -> Result<(), ErroresContrato>;
+        fn _cancelar_orden(&mut self, id_orden: u32, id_usuario: AccountId) -> Result<String, ErroresContrato>;
 
         fn _calificar_orden(
             &mut self,
@@ -415,10 +415,12 @@ mod contract {
         /// - `OrdenYaCancelada` si ya fue cancelada previamente.
         /// - `CuentaNoRegistrada` si el caller no está registrado.
         /// - `CancelacionDeOrdenSinConsenso` si el vendedor intenta cancelar la orden antes que el comprador
+        /// - `OrdenNoPendiente` si la orden ya fue enviada o recibida, o la cancelación ya fue iniciada
+        /// - `UsuarioNoCorresponde` si el usuario no pertenece a la orden
         #[ink(message)]
         pub fn cancelar_orden(&mut self, id_orden: u32) -> Result<String, ErroresContrato> {
-            self._cancelar_orden(id_orden)?;
-            Ok(String::from("La orden fue cancelada correctamente"))
+            let id_usuario = self.env().caller();
+            self._cancelar_orden(id_orden, id_usuario)
         }
 
         /// Asigna una calificación según el rol del Usuario
@@ -794,26 +796,37 @@ mod contract {
             }
         }
 
-        fn _cancelar_orden(&mut self, id_orden: u32) -> Result<(), ErroresContrato> {
+        fn _cancelar_orden(&mut self, id_orden: u32, id_usuario: AccountId) -> Result<String, ErroresContrato> {
             let mut orden = self
                 .ordenes
                 .get(id_orden)
                 .ok_or(ErroresContrato::OrdenInexistente)?;
-            if self._usuario_con_rol(COMPRADOR).is_ok() {
-                orden.status = EstadoOrden::PreCancelada;
-                self.ordenes.set(id_orden, &orden);
-                Ok(())
-            } else if self._usuario_con_rol(VENDEDOR).is_ok() {
+            let usuario = self
+                .m_usuarios
+                .get(id_usuario)
+                .ok_or(ErroresContrato::CuentaNoRegistrada)?;
+            if id_usuario == orden.id_comprador && usuario.has_role(COMPRADOR){
+                match orden.status {
+                    EstadoOrden::Pendiente => {    
+                        orden.status = EstadoOrden::PreCancelada;
+                        self.ordenes.set(id_orden, &orden);
+                        Ok(String::from("La cancelación fue iniciada y se espera confirmación del vendedor"))
+                    }
+                    EstadoOrden::Cancelada => Err(ErroresContrato::OrdenYaCancelada),
+                    _ => Err(ErroresContrato::OrdenNoPendiente),
+                }
+            } else if id_usuario == orden.id_vendedor && usuario.has_role(VENDEDOR){
                 match orden.status {
                     EstadoOrden::PreCancelada => {
                         orden.status = EstadoOrden::Cancelada;
                         self.ordenes.set(id_orden, &orden);
-                        Ok(())
+                        Ok(String::from("La cancelación de la orden fue confirmada"))
                     }
+                    EstadoOrden::Cancelada => Err(ErroresContrato::OrdenYaCancelada),
                     _ => Err(ErroresContrato::CancelacionDeOrdenSinConsenso),
                 }
             } else {
-                Err(ErroresContrato::RolNoApropiado)
+                Err(ErroresContrato::UsuarioNoCorresponde)
             }
         }
 
