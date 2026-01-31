@@ -939,7 +939,6 @@ mod contract {
         /// Recibe un ID de una publicacion y devuelve AccountId del vendedor asociado o un Error
         fn get_id_vendedor(&self, id_pub: u32) -> Result<AccountId, ErroresContrato> {
             if let Some(publicacion) = self.publicaciones.get(id_pub) {
-                //get saca el elemento del vector (hay que volver a insertarlo o no?)
                 Ok(publicacion.id_user)
             } else {
                 Err(ErroresContrato::PublicacionNoExiste)
@@ -1181,7 +1180,6 @@ mod contract {
             categoria: u32,
             stock: u32,
         ) -> Producto {
-            //TODO: verificar que stock>0 y precio>0 y nombre y desc sean validos
             Producto {
                 id,
                 id_vendedor,
@@ -1268,8 +1266,8 @@ mod contract {
         Pendiente,
         Enviada,      //solo lo puede modificar el vendedor
         Recibida,     //solo lo puede modificar el comprador
-        PreCancelada, // solo lo puede modificar el comprador
-        Cancelada,    //tienen que estar ambos de acuerdo y tiene que estar en estado pendiente
+        PreCancelada, //solo lo puede modificar el comprador
+        Cancelada,    //solo lo puede modificar el vendedor y tiene que estar en estado PreCancelada
     }
 
     ///Estructura de orden
@@ -1277,7 +1275,6 @@ mod contract {
     #[ink::scale_derive(Encode, Decode, TypeInfo)]
     #[derive(Clone)]
     pub struct Orden {
-        //info de la orden
         id: u32,
         id_publicacion: u32,
         id_vendedor: AccountId,
