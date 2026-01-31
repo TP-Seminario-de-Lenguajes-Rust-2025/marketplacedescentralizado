@@ -753,6 +753,7 @@ mod contract {
                 .ok_or(ErroresContrato::OrdenInexistente)?;
 
             if id_vendedor != orden.id_vendedor {
+                self.ordenes.set(id_orden, &orden);
                 return Err(ErroresContrato::NoEsVendedorOriginal);
             }
 
@@ -762,7 +763,10 @@ mod contract {
                     self.ordenes.set(id_orden, &orden);
                     Ok(())
                 }
-                _ => Err(ErroresContrato::OrdenNoPendiente),
+                _ => {
+                    self.ordenes.set(id_orden, &orden);
+                    Err(ErroresContrato::OrdenNoPendiente)
+                },
             }
         }
 
