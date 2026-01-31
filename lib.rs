@@ -854,7 +854,6 @@ mod contract {
                     vendedor.rating.agregar_calificacion_vendedor(puntaje);
                     // guardar los datos para tener consistencia en blockchain
                     self.m_usuarios.insert(orden.id_vendedor, &vendedor);
-                    self.ordenes.set(id_orden, &orden);
                 }
 
                 id if id == orden.id_vendedor => {
@@ -868,7 +867,6 @@ mod contract {
 
                     // Guardar los cambios en la blockchain
                     self.m_usuarios.insert(orden.id_comprador, &comprador);
-                    self.ordenes.set(id_orden, &orden);
                 }
 
                 _ => {
