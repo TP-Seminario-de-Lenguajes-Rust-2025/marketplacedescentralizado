@@ -1265,6 +1265,20 @@ mod contract {
         fn set_cantidad(&mut self, nueva: u32) {
             self.stock = nueva;
         }
+
+        //override
+        fn descontar_stock(&mut self, cantidad_a_descontar: u32) -> Result<(), ErroresContrato> {
+            self.chequear_stock_disponible(cantidad_a_descontar)?;
+            let nueva_cantidad = self
+                .get_cantidad()
+                .checked_sub(cantidad_a_descontar)
+                .ok_or(ErroresContrato::StockInsuficiente)?;
+            if nueva_cantidad == 0 {
+                self.activa = false
+            }
+            self.set_cantidad(nueva_cantidad);
+            Ok(())
+        }
     }
 
     ///Estructuras y logica de Orden
