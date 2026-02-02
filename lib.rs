@@ -95,7 +95,9 @@ mod contract {
 
         fn get_user(&mut self, id: &AccountId) -> Result<Usuario, ErroresContrato>;
 
-        fn _listar_usuarios(&self) -> Vec<Usuario>;
+        fn _get_cantidad_usuarios(&self) -> u32;
+
+        fn _listar_usuarios(&self, pagina: u32, tamano_pagina: u32) -> Vec<Usuario>;
 
         fn get_usuario_by_mail(&self, mail: &str) -> Result<Usuario, ErroresContrato>;
 
@@ -462,10 +464,16 @@ mod contract {
             self._asignar_rol(self.env().caller(), rol)
         }
 
+        /// Devuelve la cantidad de usuarios registrados en el contrato.
+        #[ink(message)]
+        pub fn get_cantidad_usuarios(&self) -> u32 {
+            self._get_cantidad_usuarios()
+        }
+
         /// Devuelve una lista de todos los usuarios registrados en el contrato.
         #[ink(message)]
-        pub fn listar_usuarios(&self) -> Vec<Usuario> {
-            self._listar_usuarios()
+        pub fn listar_usuarios(&self, pagina: u32, tamano_pagina: u32) -> Vec<Usuario> {
+            self._listar_usuarios(pagina, tamano_pagina)
         }
 
         /// Devuelve una lista de todos los productos registrados en el contrato.
@@ -620,9 +628,34 @@ mod contract {
                 .ok_or(ErroresContrato::UsuarioNoExiste)
         }
 
-        fn _listar_usuarios(&self) -> Vec<Usuario> {
+        fn _get_cantidad_usuarios(&self) -> u32 {
+            self.v_usuarios.len()
+        }
+
+        fn _listar_usuarios(&self, pagina: u32, tamano_pagina: u32) -> Vec<Usuario> {
+            let total_usuarios = self.v_usuarios.len();
+
+            // Si el tamaño de pagina es 0, devolvemos vacio
+            if total_usuarios == 0 {
+                return Vec::new();
+            }
+
+            // Calculamos el índice de inicio
+            let inicio = match pagina.checked_mul(tamano_pagina) {
+                Some(val) => val,
+                None => return Vec::new(), // Si el numero es muy gigante, devolvemos vacio
+            };
+
+            // Si el inicio es mayor o igual al total, significa que la pagina no existe
+            if inicio >= total_usuarios {
+                return Vec::new();
+            }
+
+            // Calculamos el final. No puede ser mayor que el total de usuarios.
+            let fin = core::cmp::min(inicio.saturating_add(tamano_pagina), total_usuarios);
+
             let mut resultado = Vec::new();
-            for i in 0..self.v_usuarios.len() {
+            for i in inicio..fin {
                 if let Some(account_id) = self.v_usuarios.get(i) {
                     if let Some(usuario) = self.m_usuarios.get(account_id) {
                         resultado.push(usuario);
@@ -2094,7 +2127,7 @@ mod tests {
             "Se esperaba que se registre un usuario"
         );
 
-        let user_created = app.listar_usuarios()[0].clone();
+        let user_created = app.listar_usuarios(0, 1)[0].clone();
 
         assert!(
             !user_created.get_name().is_empty(),
@@ -2196,7 +2229,7 @@ mod tests {
     #[ink::test]
     fn devuelve_user_con_id_correctamente() {
         let (mut app, user_id, _) = build_testing_setup();
-        let expected = app.listar_usuarios()[0].clone();
+        let expected = app.listar_usuarios(0, 1)[0].clone();
 
         assert_eq!(
             app.get_user(&user_id).unwrap().get_name(),
@@ -2220,7 +2253,7 @@ mod tests {
     #[ink::test]
     fn devuelve_user_con_email_correctamente() {
         let (app, _, _) = build_testing_setup();
-        let expected = app.listar_usuarios()[0].clone();
+        let expected = app.listar_usuarios(0, 1)[0].clone();
 
         assert!(
             app.get_usuario_by_mail("not_existent_email@email.com")
@@ -2296,14 +2329,32 @@ mod tests {
     }
 
     #[ink::test]
-    fn listar_usuarios_correctamente() {
+    fn listar_usuarios_paginado_correctamente() {
         let (mut app, user1_id, user2_id) = build_testing_setup();
-        let expected = Vec::from([app.get_user(&user1_id), app.get_user(&user2_id)]);
-        assert_eq!(
-            app.listar_usuarios().len(),
-            expected.len(),
-            "Se esperaba que los vectores tengan el mismo largo"
-        );
+        assert_eq!(app._get_cantidad_usuarios(), 2);
+        
+        let pagina_1 = app.listar_usuarios(0, 1);
+        assert_eq!(pagina_1.len(), 1);
+        assert_eq!(pagina_1[0].get_id(), user1_id);
+
+        let pagina_2 = app.listar_usuarios(1, 1);
+        assert_eq!(pagina_2.len(), 1);
+        assert_eq!(pagina_2[0].get_id(), user2_id);
+        
+        let todos = app.listar_usuarios(0, 10);
+        assert_eq!(todos.len(), 2);
+    }
+
+    #[ink::test]
+    fn listar_usuarios_tamano_pagina_incorrectos() {
+        let (mut app, user1_id, user2_id) = build_testing_setup();
+        
+        let pagina_1 = app.listar_usuarios(0, 0);
+        assert_eq!(pagina_1.len(), 0);
+
+        let pagina_2 = app.listar_usuarios(2, 4294967295);
+        assert_eq!(pagina_2.len(), 0);
+
     }
 
     ///Tests gestion orden
