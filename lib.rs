@@ -1330,6 +1330,13 @@ mod contract {
     }
 }
 
+pub mod prelude {
+    pub use super::contract::{
+        SistemaRef, Categoria, Orden, Usuario, Rating, Producto, Publicacion, EstadoOrden, Rol
+    };
+}
+
+
 #[cfg(test)]
 mod tests {
     use crate::contract::*;
