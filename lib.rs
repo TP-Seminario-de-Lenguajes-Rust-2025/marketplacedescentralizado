@@ -67,6 +67,7 @@ mod contract {
         YaCalificado,
         UsuarioNoCorresponde,
         NoTieneCalificaciones,
+        ErrorSuma,
     }
 
     pub trait GestionProducto {
@@ -816,6 +817,14 @@ mod contract {
                 match orden.status {
                     EstadoOrden::PreCancelada => {
                         orden.status = EstadoOrden::Cancelada;
+                        let mut publi = self
+                            .publicaciones
+                            .get(orden.id_publicacion)
+                            .ok_or(ErroresContrato::PublicacionNoExiste)?;
+                        let mut cantidad = publi.get_cantidad();
+                        cantidad = cantidad.checked_add(orden.cantidad).ok_or(ErroresContrato::ErrorSuma)?;
+                        publi.set_cantidad(cantidad);
+                        self.publicaciones.set(orden.id_publicacion, &publi);
                         self.ordenes.set(id_orden, &orden);
                         Ok(String::from("La cancelación de la orden fue confirmada"))
                     }
