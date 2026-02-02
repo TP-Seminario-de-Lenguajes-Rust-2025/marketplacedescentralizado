@@ -752,7 +752,7 @@ mod contract {
                 .get(id_orden)
                 .ok_or(ErroresContrato::OrdenInexistente)?;
 
-            if id_vendedor != orden.id_vendedor {}
+            if id_vendedor != orden.id_vendedor {
                 return Err(ErroresContrato::NoEsVendedorOriginal);
             }
 
