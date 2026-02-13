@@ -67,6 +67,7 @@ mod contract {
         YaCalificado,
         UsuarioNoCorresponde,
         NoTieneCalificaciones,
+        ErrorSuma,
     }
 
     pub trait GestionProducto {
@@ -816,6 +817,14 @@ mod contract {
                 match orden.status {
                     EstadoOrden::PreCancelada => {
                         orden.status = EstadoOrden::Cancelada;
+                        let mut publi = self
+                            .publicaciones
+                            .get(orden.id_publicacion)
+                            .ok_or(ErroresContrato::PublicacionNoExiste)?;
+                        let mut cantidad = publi.get_cantidad();
+                        cantidad = cantidad.checked_add(orden.cantidad).ok_or(ErroresContrato::ErrorSuma)?;
+                        publi.set_cantidad(cantidad);
+                        self.publicaciones.set(orden.id_publicacion, &publi);
                         self.ordenes.set(id_orden, &orden);
                         Ok(String::from("La cancelación de la orden fue confirmada"))
                     }
@@ -1059,6 +1068,16 @@ mod contract {
         pub fn get_id(&self) -> AccountId {
             self.id.clone()
         }
+
+        /// Devuelve la reputación como Comprador de un usuario
+        pub fn mostrar_calificacion_vendedor(&self) -> Result<String, ErroresContrato> {
+            self.rating.display_vendedor()
+        }
+
+        /// Devuelve la reputación como Vendedor de un usuario
+        pub fn mostrar_calificacion_comprador(&self) -> Result<String, ErroresContrato> {
+            self.rating.display_comprador()
+        }
     }
 
     /// Estructura correspondiente al rating de un usuario
@@ -1254,6 +1273,20 @@ mod contract {
 
         fn set_cantidad(&mut self, nueva: u32) {
             self.stock = nueva;
+        }
+
+        //override
+        fn descontar_stock(&mut self, cantidad_a_descontar: u32) -> Result<(), ErroresContrato> {
+            self.chequear_stock_disponible(cantidad_a_descontar)?;
+            let nueva_cantidad = self
+                .get_cantidad()
+                .checked_sub(cantidad_a_descontar)
+                .ok_or(ErroresContrato::StockInsuficiente)?;
+            if nueva_cantidad == 0 {
+                self.activa = false
+            }
+            self.set_cantidad(nueva_cantidad);
+            Ok(())
         }
     }
 
