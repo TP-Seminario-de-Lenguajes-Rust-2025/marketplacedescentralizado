@@ -2997,4 +2997,41 @@ mod tests {
         let res = sistema.calificar_compra(id_orden, 5);
         assert_eq!(res, Err(ErroresContrato::OrdenNoRecibida));
     }
+
+    #[ink::test]
+    fn test_mostrar_calificacion_exitosa() {
+        let (mut sistema, id_orden, comprador, vendedor) = setup_orden_recibida();
+
+        // calificamos al comprador con 4 estrellas
+        set_caller(vendedor);
+        let res = sistema.calificar_compra(id_orden, 4);
+        assert!(res.is_ok());
+        let usuario_comprador = sistema.get_user(&comprador).unwrap();
+
+        assert_eq!(resultado, "Calificacion como comprador: 4,0");
+
+        // calificamos al vendedor con 5 estrellas
+        set_caller(comprador);
+        let res = sistema.calificar_compra(id_orden, 5);
+        assert!(res.is_ok(), "La calificación debería ser exitosa");
+        let orden = sistema.listar_ordenes()[0].clone();
+        // Verificamos que la reputacion aumenta
+        let usuario_vendedor = sistema.get_user(&vendedor).unwrap();
+
+        assert_eq!(resultado, "Calificacion como vendedor: 5,0");
+
+    }
+
+    #[ink::test]
+    fn test_mostrar_calificacion_inexistente() {
+        let (mut sistema, id, _,)= build_testing_setup();
+        let usuario = sistema.get_user(id);
+
+
+        let resultado_1 = usuario.mostrar_calificacion_vendedor();
+        assert!(matches!(resultado_1, Err(ErroresContrato::NoTieneCalificaciones)));
+
+        let resultado_2 = usuario.mostrar_calificacion_comprador();
+        assert!(matches!(resultado_2, Err(ErroresContrato::NoTieneCalificaciones)));
+    }
 }
