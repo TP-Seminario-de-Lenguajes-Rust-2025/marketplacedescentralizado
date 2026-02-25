@@ -1118,8 +1118,8 @@ mod contract {
     #[ink::scale_derive(Encode, Decode, TypeInfo)]
     #[derive(Clone)]
     pub struct Rating {
-        pub calificacion_comprador: (u32, u32), //valor cumulativo de todas las calificaciones, cant de compras
-        pub calificacion_vendedor: (u32, u32),
+        calificacion_comprador: (u32, u32), //valor cumulativo de todas las calificaciones, cant de compras
+        calificacion_vendedor: (u32, u32),
     }
 
     ///Métodos de usuario
