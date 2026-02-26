@@ -1144,27 +1144,31 @@ mod contract {
             self.calificacion_vendedor.1 = self.calificacion_vendedor.1.saturating_add(1);
         }
 
+        pub fn get_calificacion_comprador(&mut self) -> (u32, u32) {
+            self.calificacion_comprador.clone()
+        }
+
+        pub fn get_calificacion_vendedor(&mut self) -> (u32, u32) {
+            self.calificacion_vendedor.clone()
+        }
+
         fn display_comprador(&self) -> Result<String, ErroresContrato> {
             if self.calificacion_comprador.1 == 0 {
                 return Err(ErroresContrato::NoTieneCalificaciones);
             }
+            //se toma el valor cumulativo y se corre la coma para tener un digito menos significativo extra, el cual se usa para simular un decimal
             let cal_c: u32 = (self
                 .calificacion_comprador
                 .0
                 .checked_mul(10)
                 .ok_or(ErroresContrato::ErrorMultiplicacion)?)
-            .checked_div(
-                self.calificacion_comprador
-                    .1
-                    .checked_mul(10)
-                    .ok_or(ErroresContrato::ErrorMultiplicacion)?,
-            )
+            .checked_div(self.calificacion_comprador.1) //se divide el valor cumulativo por la cantidad de calificaciones
             .ok_or(ErroresContrato::ErrorMultiplicacion)?;
 
             Ok(format!(
                 "Calificacion como comprador: {entero},{decimal}",
-                entero = cal_c.div(10),
-                decimal = cal_c.rem(10)
+                entero = cal_c.div(10), //se compensa el corrimiento de la coma en la parte entera
+                decimal = cal_c.rem(10) //se toma el digito menos significativo como valor decimal
             ))
         }
 
@@ -1177,12 +1181,7 @@ mod contract {
                 .0
                 .checked_mul(10)
                 .ok_or(ErroresContrato::ErrorMultiplicacion)?)
-            .checked_div(
-                self.calificacion_vendedor
-                    .1
-                    .checked_mul(10)
-                    .ok_or(ErroresContrato::ErrorMultiplicacion)?,
-            )
+            .checked_div(self.calificacion_vendedor.1)
             .ok_or(ErroresContrato::ErrorMultiplicacion)?;
 
             Ok(format!(
@@ -2903,14 +2902,14 @@ mod tests {
         assert!(res.is_ok(), "La calificación debería ser exitosa");
         let orden = sistema.listar_ordenes()[0].clone();
         // Verrificamos que la repu aumento
-        let usuario_vendedor = sistema.get_user(&vendedor).unwrap();
+        let mut usuario_vendedor = sistema.get_user(&vendedor).unwrap();
         // accedemos a la tupla para ver los resultados
         assert_eq!(
-            usuario_vendedor.rating.calificacion_vendedor.0, 5,
+            usuario_vendedor.rating.get_calificacion_vendedor().0, 5,
             "Debería tener 1 calificación"
         );
         assert_eq!(
-            usuario_vendedor.rating.calificacion_vendedor.1, 1,
+            usuario_vendedor.rating.get_calificacion_vendedor().1, 1,
             "La suma de puntos debería ser 5"
         );
     }
@@ -2923,10 +2922,10 @@ mod tests {
         set_caller(vendedor);
         let res = sistema.calificar_compra(id_orden, 4);
         assert!(res.is_ok());
-        let usuario_comprador = sistema.get_user(&comprador).unwrap();
+        let mut usuario_comprador = sistema.get_user(&comprador).unwrap();
 
-        assert_eq!(usuario_comprador.rating.calificacion_comprador.0, 4);
-        assert_eq!(usuario_comprador.rating.calificacion_comprador.1, 1);
+        assert_eq!(usuario_comprador.rating.get_calificacion_comprador().0, 4);
+        assert_eq!(usuario_comprador.rating.get_calificacion_comprador().1, 1);
     }
 
     #[ink::test]
@@ -2999,7 +2998,7 @@ mod tests {
     }
 
     #[ink::test]
-    fn test_mostrar_calificacion_exitosa() {
+    fn test_mostrar_calificacion_exitosa_comprador() {
         let (mut sistema, id_orden, comprador, vendedor) = setup_orden_recibida();
 
         // calificamos al comprador con 4 estrellas
@@ -3008,7 +3007,13 @@ mod tests {
         assert!(res.is_ok());
         let usuario_comprador = sistema.get_user(&comprador).unwrap();
 
-        assert_eq!(resultado, "Calificacion como comprador: 4,0");
+        let resultado_1 = usuario_comprador.mostrar_calificacion_comprador();
+        assert_eq!(resultado_1, Ok(String::from("Calificacion como comprador: 4,0")));
+    }
+
+    #[ink::test]
+    fn test_mostrar_calificacion_exitosa_vendedor() {
+        let (mut sistema, id_orden, comprador, vendedor) = setup_orden_recibida();
 
         // calificamos al vendedor con 5 estrellas
         set_caller(comprador);
@@ -3018,14 +3023,14 @@ mod tests {
         // Verificamos que la reputacion aumenta
         let usuario_vendedor = sistema.get_user(&vendedor).unwrap();
 
-        assert_eq!(resultado, "Calificacion como vendedor: 5,0");
-
+        let resultado_2 = usuario_vendedor.mostrar_calificacion_vendedor();
+        assert_eq!(resultado_2, Ok(String::from("Calificacion como vendedor: 5,0")));
     }
 
     #[ink::test]
     fn test_mostrar_calificacion_inexistente() {
         let (mut sistema, id, _,)= build_testing_setup();
-        let usuario = sistema.get_user(id);
+        let usuario = sistema.get_user(&id).unwrap();
 
 
         let resultado_1 = usuario.mostrar_calificacion_vendedor();
