@@ -104,6 +104,8 @@ mod contract {
 
         fn get_usuario_by_username(&self, name: &str) -> Result<Usuario, ErroresContrato>;
 
+        fn get_usuario_by_id(&self, id: &AccountId) -> Result<Usuario, ErroresContrato>;
+
         fn _asignar_rol(&mut self, id: AccountId, rol: Rol) -> Result<String, ErroresContrato>;
     }
 
@@ -611,6 +613,11 @@ mod contract {
                 return Err(ErroresContrato::UsuarioYaExistente);
             };
 
+            // Verifico que el AccountId no esté registrado
+            if self.get_usuario_by_id(&id).is_ok() {
+                return Err(ErroresContrato::UsuarioYaExistente);
+            }
+
             // Instancio nuevo usuario
             let usuario = Usuario::new(id, nombre, mail);
 
@@ -701,7 +708,25 @@ mod contract {
                     return Ok(usuario);
                 };
             }
-            Err(ErroresContrato::UsuarioYaExistente)
+            Err(ErroresContrato::UsuarioNoExiste)
+        }
+
+        /// Verifica si existe un usuario registrado con el AccountId provisto
+        fn get_usuario_by_id(&self, id: &AccountId) -> Result<Usuario, ErroresContrato> {
+            for i in 0..self.v_usuarios.len() {
+                let account_id = self
+                    .v_usuarios
+                    .get(i)
+                    .ok_or(ErroresContrato::IndiceInvalido)?;
+                if account_id == *id {
+                    let usuario = self
+                        .m_usuarios
+                        .get(account_id)
+                        .ok_or(ErroresContrato::AccountIdInvalida)?;
+                    return Ok(usuario);
+                }
+            }
+            Err(ErroresContrato::UsuarioNoExiste)
         }
 
         fn _asignar_rol(&mut self, id: AccountId, rol: Rol) -> Result<String, ErroresContrato> {
