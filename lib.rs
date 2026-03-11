@@ -104,8 +104,6 @@ mod contract {
 
         fn get_usuario_by_username(&self, name: &str) -> Result<Usuario, ErroresContrato>;
 
-        fn get_usuario_by_id(&self, id: &AccountId) -> Result<Usuario, ErroresContrato>;
-
         fn _asignar_rol(&mut self, id: AccountId, rol: Rol) -> Result<String, ErroresContrato>;
     }
 
