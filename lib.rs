@@ -614,7 +614,7 @@ mod contract {
             };
 
             // Verifico que el AccountId no esté registrado
-            if self.get_usuario_by_id(&id).is_ok() {
+            if self.get_user(&id).is_ok() {
                 return Err(ErroresContrato::UsuarioYaExistente);
             }
 
@@ -707,24 +707,6 @@ mod contract {
                 if usuario.nombre == name {
                     return Ok(usuario);
                 };
-            }
-            Err(ErroresContrato::UsuarioNoExiste)
-        }
-
-        /// Verifica si existe un usuario registrado con el AccountId provisto
-        fn get_usuario_by_id(&self, id: &AccountId) -> Result<Usuario, ErroresContrato> {
-            for i in 0..self.v_usuarios.len() {
-                let account_id = self
-                    .v_usuarios
-                    .get(i)
-                    .ok_or(ErroresContrato::IndiceInvalido)?;
-                if account_id == *id {
-                    let usuario = self
-                        .m_usuarios
-                        .get(account_id)
-                        .ok_or(ErroresContrato::AccountIdInvalida)?;
-                    return Ok(usuario);
-                }
             }
             Err(ErroresContrato::UsuarioNoExiste)
         }
