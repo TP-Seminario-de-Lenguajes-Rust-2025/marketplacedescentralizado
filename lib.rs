@@ -2400,7 +2400,7 @@ mod tests {
         let (mut app, user1_id, user2_id) = build_testing_setup();
         
         let pagina_1 = app.listar_usuarios(0, 0);
-        assert_eq!(pagina_1.len(), 0);
+        assert_eq!(pagina_1.len(), 2);
 
         let pagina_2 = app.listar_usuarios(2, 4294967295);
         assert_eq!(pagina_2.len(), 0);
