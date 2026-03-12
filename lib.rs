@@ -641,24 +641,37 @@ mod contract {
         fn _listar_usuarios(&self, pagina: u32, tamano_pagina: u32) -> Vec<Usuario> {
             let total_usuarios = self.v_usuarios.len();
 
-            // Si el tamaño de pagina es 0, devolvemos vacio
+            // Si no hay usuarios registrados, devolvemos un vector vacío directamente
             if total_usuarios == 0 {
                 return Vec::new();
             }
 
-            // Calculamos el índice de inicio
-            let inicio = match pagina.checked_mul(tamano_pagina) {
-                Some(val) => val,
-                None => return Vec::new(), // Si el numero es muy gigante, devolvemos vacio
-            };
+            let inicio;
+            let fin;
 
-            // Si el inicio es mayor o igual al total, significa que la pagina no existe
-            if inicio >= total_usuarios {
-                return Vec::new();
+            // Lógica para definir los límites según la página
+            if pagina == 0 {
+                // Página 0: traemos absolutamente todos los usuarios
+                inicio = 0;
+                fin = total_usuarios;
+            } else {
+                // Pagina > 0: paginacion normal. Asumimos que la página 1 es la primera, 
+                // restamos 1 para que el índice sea 0.
+                let indice_pagina = pagina.saturating_sub(1);
+                
+                inicio = match indice_pagina.checked_mul(tamano_pagina) {
+                    Some(val) => val,
+                    None => return Vec::new(), // Si hay overflow, devolvemos vacío
+                };
+
+                // Si el inicio supera la cantidad de usuarios, la página no existe
+                if inicio >= total_usuarios {
+                    return Vec::new();
+                }
+
+                // Calculamos el final respetando el tope de usuarios totales
+                fin = core::cmp::min(inicio.saturating_add(tamano_pagina), total_usuarios);
             }
-
-            // Calculamos el final. No puede ser mayor que el total de usuarios.
-            let fin = core::cmp::min(inicio.saturating_add(tamano_pagina), total_usuarios);
 
             let mut resultado = Vec::new();
             for i in inicio..fin {
@@ -2370,11 +2383,11 @@ mod tests {
         let (mut app, user1_id, user2_id) = build_testing_setup();
         assert_eq!(app._get_cantidad_usuarios(), 2);
         
-        let pagina_1 = app.listar_usuarios(0, 1);
+        let pagina_1 = app.listar_usuarios(1, 1);
         assert_eq!(pagina_1.len(), 1);
         assert_eq!(pagina_1[0].get_id(), user1_id);
 
-        let pagina_2 = app.listar_usuarios(1, 1);
+        let pagina_2 = app.listar_usuarios(2, 1);
         assert_eq!(pagina_2.len(), 1);
         assert_eq!(pagina_2[0].get_id(), user2_id);
         
