@@ -1224,6 +1224,14 @@ mod contract {
         pub fn new(id: u32, nombre: String) -> Self {
             Self { id, nombre }
         }
+
+        pub fn get_id(&self) -> u32 {
+            self.id.clone()
+        }
+
+        pub fn get_nombre(&self) -> String {
+            self.nombre.clone()
+        }
     }
 
     ///Estructura de un producto
@@ -1265,6 +1273,14 @@ mod contract {
                 return true;
             }
             false
+        }
+
+        pub fn get_id(&self) -> u32 {
+            self.id.clone()
+        }
+
+        pub fn get_id_categoria(&self) -> u32 {
+            self.categoria.clone()
         }
     }
 
@@ -1313,6 +1329,14 @@ mod contract {
                 precio_unitario,
                 activa: true,
             }
+        }
+
+        pub fn get_id(&self) -> u32 {
+            self.id.clone()
+        }
+
+        pub fn get_id_producto(&self) -> u32 {
+            self.id_prod.clone()
         }
     }
 
@@ -1398,15 +1422,23 @@ mod contract {
         pub fn get_status(&self) -> EstadoOrden {
             self.status
         }
+
         pub fn get_id_comprador(&self) -> AccountId {
             self.id_comprador.clone()
         }
+
         pub fn get_id_vendedor(&self) -> AccountId {
             self.id_vendedor.clone()
         }
+
+        pub fn get_id_publicacion(&self) -> u32 {
+            self.id_publicacion.clone()
+        }
+
         pub fn get_calificacion_vendedor(&self) -> Option<u8> {
             self.cal_vendedor
         }
+
         pub fn get_calificacion_comprador(&self) -> Option<u8> {
             self.cal_comprador
         }
