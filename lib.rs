@@ -350,6 +350,21 @@ mod contract {
             self._crear_orden(id_pub, self.env().caller(), cantidad)
         }
 
+
+        /// Obtiene la información detallada de un producto específico mediante su ID.
+        ///
+        /// # Parámetros
+        /// - `id_producto`: Identificador único del producto que se desea consultar.
+        ///
+        /// # Retorno
+        /// - `Some(Producto)` con los datos completos del producto si este existe en el registro.
+        /// - `None` si el identificador proporcionado no corresponde a ningún producto guardado.
+        #[ink(message)]
+        pub fn obtener_producto(&self, id_producto: u32) -> Option<Producto> {
+            // Asumiendo que tenés un mapping o vector de productos
+            self.m_productos.get(id_producto) 
+        }
+
         /// Marca una orden como `Enviada`.
         ///
         /// # Parámetros
