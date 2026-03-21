@@ -1399,7 +1399,7 @@ mod contract {
         id_publicacion: u32,
         id_vendedor: AccountId,
         id_comprador: AccountId,
-        status: EstadoOrden,
+        pub status: EstadoOrden,
         cantidad: u32,
         precio_total: Balance,
         cal_vendedor: Option<u8>,  //calificacion que recibe el vendedor
