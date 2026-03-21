@@ -356,13 +356,11 @@ mod contract {
         /// # Parámetros
         /// - `id_producto`: Identificador único del producto que se desea consultar.
         ///
-        /// # Retorno
-        /// - `Some(Producto)` con los datos completos del producto si este existe en el registro.
-        /// - `None` si el identificador proporcionado no corresponde a ningún producto guardado.
+        /// # Errores
+        /// - `ProductoInexistente` si el identificador proporcionado no corresponde a ningún producto guardado en el sistema.
         #[ink(message)]
-        pub fn obtener_producto(&self, id_producto: u32) -> Option<Producto> {
-            // Asumiendo que tenés un mapping o vector de productos
-            self.m_productos.get(id_producto) 
+        pub fn obtener_producto(&self, id_producto: u32) -> Result<Producto, ErroresContrato> {
+            self.m_productos.get(id_producto).ok_or(ErroresContrato::ProductoInexistente)
         }
 
         /// Marca una orden como `Enviada`.
