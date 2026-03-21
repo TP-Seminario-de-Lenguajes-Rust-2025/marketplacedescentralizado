@@ -1120,12 +1120,12 @@ mod contract {
             self.id.clone()
         }
 
-        /// Devuelve la reputación como Comprador de un usuario
+        /// Devuelve la reputación como Vendedor de un usuario
         pub fn mostrar_calificacion_vendedor(&self) -> Result<String, ErroresContrato> {
             self.rating.display_vendedor()
         }
 
-        /// Devuelve la reputación como Vendedor de un usuario
+        /// Devuelve la reputación como Comprador de un usuario
         pub fn mostrar_calificacion_comprador(&self) -> Result<String, ErroresContrato> {
             self.rating.display_comprador()
         }
