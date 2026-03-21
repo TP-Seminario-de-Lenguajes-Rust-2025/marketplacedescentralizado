@@ -1282,6 +1282,10 @@ mod contract {
         pub fn get_id_categoria(&self) -> u32 {
             self.categoria.clone()
         }
+
+        pub get_nombre(&self) -> String {
+            self.nombre.clone()
+        }
     }
 
     impl ControlStock for Producto {
