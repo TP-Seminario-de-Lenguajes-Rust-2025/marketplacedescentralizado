@@ -1283,7 +1283,7 @@ mod contract {
             self.categoria.clone()
         }
 
-        pub get_nombre(&self) -> String {
+        pub fn get_nombre(&self) -> String {
             self.nombre.clone()
         }
     }
@@ -1390,7 +1390,7 @@ mod contract {
         id_publicacion: u32,
         id_vendedor: AccountId,
         id_comprador: AccountId,
-        pub status: EstadoOrden,
+        status: EstadoOrden,
         cantidad: u32,
         precio_total: Balance,
         cal_vendedor: Option<u8>,  //calificacion que recibe el vendedor
