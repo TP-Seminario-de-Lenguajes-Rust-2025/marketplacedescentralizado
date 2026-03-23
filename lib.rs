@@ -3,17 +3,15 @@
 #[ink::contract]
 mod contract {
     use core::{
-        fmt::Error,
-        ops::{Add, Div, Rem},
+        ops::{Div, Rem},
     };
 
     use ink::{
         prelude::{string::String, vec::Vec},
         storage::{traits::StorageLayout, Mapping, StorageVec},
-        xcm::v2::Junction::AccountId32,
     };
-    use scale::{Decode, Encode};
-    use scale_info::{prelude::format, TypeInfo};
+    //use scale::{Decode, Encode};
+    use scale_info::prelude::format;
     //use scale_info::prelude::vec::Vec;
 
     pub const COMPRADOR: Rol = Rol::Comprador;
@@ -1412,7 +1410,7 @@ mod tests {
     use crate::contract::*;
 
     use ink::{
-        env::{test::set_callee, DefaultEnvironment},
+        env::DefaultEnvironment,
         primitives::AccountId,
     };
     use ink_e2e::{account_id, AccountKeyring};
@@ -2367,7 +2365,7 @@ mod tests {
 
     #[ink::test]
     fn listar_usuarios_paginado_correctamente() {
-        let (mut app, user1_id, user2_id) = build_testing_setup();
+        let (app, user1_id, user2_id) = build_testing_setup();
         assert_eq!(app._get_cantidad_usuarios(), 2);
         
         let pagina_1 = app.listar_usuarios(0, 1);
