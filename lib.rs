@@ -1128,11 +1128,11 @@ mod contract {
             self.rating.display_comprador()
         }
 
-        pub fn get_calificacion_comprador(&self) -> (u32, u32) {
+        pub fn get_calificacion_comprador(&mut self) -> (u32, u32) {
             self.rating.get_calificacion_comprador()
         }
 
-        pub fn get_calificacion_vendedor(&self) -> (u32, u32) {
+        pub fn get_calificacion_vendedor(&mut self) -> (u32, u32) {
             self.rating.get_calificacion_vendedor()
         }
     }
@@ -2962,7 +2962,7 @@ mod tests {
         assert!(res.is_ok(), "La calificación debería ser exitosa");
         
         // Verificamos que la repu aumento
-        let usuario_vendedor = sistema.get_user(&vendedor).unwrap();
+        let mut usuario_vendedor = sistema.get_user(&vendedor).unwrap();
 
         // accedemos a la tupla para ver los resultados
         assert_eq!(
@@ -2987,7 +2987,7 @@ mod tests {
         set_caller(vendedor);
         let res = sistema.calificar_compra(id_orden, 4);
         assert!(res.is_ok());
-        let usuario_comprador = sistema.get_user(&comprador).unwrap();
+        let mut usuario_comprador = sistema.get_user(&comprador).unwrap();
 
         assert_eq!(usuario_comprador.get_calificacion_comprador().0, 4);
         assert_eq!(usuario_comprador.get_calificacion_comprador().1, 1);
