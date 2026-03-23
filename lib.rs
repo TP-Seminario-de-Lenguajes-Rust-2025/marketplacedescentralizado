@@ -1071,7 +1071,7 @@ mod contract {
         id: AccountId,
         nombre: String,
         mail: String,
-        pub rating: Rating,
+        rating: Rating,
         roles: Vec<Rol>,
     }
 
@@ -2384,7 +2384,7 @@ mod tests {
 
     #[ink::test]
     fn listar_usuarios_tamano_pagina_incorrectos() {
-        let (mut app, user1_id, user2_id) = build_testing_setup();
+        let (app, _user1_id, _user2_id) = build_testing_setup();
         
         let pagina_1 = app.listar_usuarios(0, 0);
         assert_eq!(pagina_1.len(), 0);
@@ -2905,17 +2905,13 @@ mod tests {
         set_caller(comprador);
         let res = sistema.calificar_compra(id_orden, 5);
         assert!(res.is_ok(), "La calificación debería ser exitosa");
-        let orden = sistema.listar_ordenes()[0].clone();
-        // Verrificamos que la repu aumento
-        let mut usuario_vendedor = sistema.get_user(&vendedor).unwrap();
-        // accedemos a la tupla para ver los resultados
+        
+        // Verificamos que la repu aumento
+        let usuario_vendedor = sistema.get_user(&vendedor).unwrap();
+
         assert_eq!(
-            usuario_vendedor.rating.get_calificacion_vendedor().0, 5,
-            "Debería tener 1 calificación"
-        );
-        assert_eq!(
-            usuario_vendedor.rating.get_calificacion_vendedor().1, 1,
-            "La suma de puntos debería ser 5"
+            usuario_vendedor.mostrar_calificacion_vendedor(), Ok(String::from("Calificacion como vendedor: 5,0")),
+            "Debería mostrar calificacion de 5,0"
         );
     }
 
@@ -2927,10 +2923,10 @@ mod tests {
         set_caller(vendedor);
         let res = sistema.calificar_compra(id_orden, 4);
         assert!(res.is_ok());
-        let mut usuario_comprador = sistema.get_user(&comprador).unwrap();
+        let usuario_comprador = sistema.get_user(&comprador).unwrap();
 
-        assert_eq!(usuario_comprador.rating.get_calificacion_comprador().0, 4);
-        assert_eq!(usuario_comprador.rating.get_calificacion_comprador().1, 1);
+        assert_eq!(usuario_comprador.mostrar_calificacion_comprador(), Ok(String::from("Calificacion como comprador: 4,0")));
+
     }
 
     #[ink::test]
@@ -3024,7 +3020,7 @@ mod tests {
         set_caller(comprador);
         let res = sistema.calificar_compra(id_orden, 5);
         assert!(res.is_ok(), "La calificación debería ser exitosa");
-        let orden = sistema.listar_ordenes()[0].clone();
+        
         // Verificamos que la reputacion aumenta
         let usuario_vendedor = sistema.get_user(&vendedor).unwrap();
 
